@@ -318,7 +318,7 @@
           <div style="overflow-x:auto;">
           <table>
             <thead><tr>
-              <th>Nomor Siswa</th><th>Nama Siswa</th><th>Tanggal Lahir</th><th>Kelas</th>
+              <th>Foto</th><th>Nomor Siswa</th><th>Nama Siswa</th><th>Tanggal Lahir</th><th>Kelas</th>
               <th>Tanggal Gabung</th><th>Tanggal Jenjang di Kelas</th><th>Alamat</th><th>RW</th>
               <th>Kelurahan</th><th>Nama Orang Tua</th><th>Aksi</th>
             </tr></thead>
@@ -430,6 +430,7 @@
           <button data-tab="kelasinfo" onclick="switchTab('kelasinfo')">&#127891; Kelas & Jenjang</button>
           <button data-tab="alamat" onclick="switchTab('alamat')">&#128205; Alamat</button>
           <button data-tab="ortu" onclick="switchTab('ortu')">&#128101; Orang Tua</button>
+          <button data-tab="foto" onclick="switchTab('foto')">&#128247; Foto</button>
         </div>
         <div style="flex:1;min-width:0;">
           <div class="tab-panel active" data-panel="identitas">
@@ -462,6 +463,30 @@
             <div class="eyebrow">Orang Tua</div>
             <div class="form-grid">
               <div class="field full"><label>Nama Orang Tua</label><input id="f_namaortu"></div>
+            </div>
+          </div>
+          <div class="tab-panel" data-panel="foto">
+            <div class="eyebrow">Foto Murid</div>
+            <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;">
+              <div style="width:140px;height:140px;border-radius:12px;overflow:hidden;background:var(--blue-50);display:flex;align-items:center;justify-content:center;border:1px solid var(--line);flex-shrink:0;">
+                <img id="fotoPreviewImg" class="hidden" style="width:100%;height:100%;object-fit:cover;" alt="Foto murid">
+                <span id="fotoPreviewEmpty" style="color:var(--ink-400);font-size:11px;text-align:center;padding:10px;">Belum ada foto</span>
+              </div>
+              <div style="flex:1;min-width:220px;display:flex;flex-direction:column;gap:8px;">
+                <input type="file" id="fotoFileInput" accept="image/jpeg,image/png,image/webp" onchange="handleFotoFile(event)">
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                  <button type="button" class="btn btn-outline" onclick="openFotoCamera()">&#128247; Ambil dari Kamera</button>
+                  <button type="button" class="btn btn-outline" onclick="deleteFotoMurid()">&#128465; Hapus Foto</button>
+                </div>
+                <div style="font-size:11px;color:var(--ink-400);">Format JPG/PNG/WEBP. Foto otomatis di-crop persegi &amp; diresize ke 320&times;320 sebelum diunggah ke Google Drive.</div>
+                <div id="fotoCameraWrap" class="hidden">
+                  <video id="fotoCameraVideo" autoplay playsinline style="width:100%;max-width:260px;border-radius:9px;background:#000;"></video>
+                  <div style="display:flex;gap:8px;margin-top:6px;">
+                    <button type="button" class="btn btn-primary" onclick="captureFotoFromCamera()">Ambil Foto</button>
+                    <button type="button" class="btn btn-outline" onclick="closeFotoCamera()">Tutup Kamera</button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -576,6 +601,9 @@ let accounts = [], muridList = [], guruList = [], kelasList = [], kehadiranList 
 let currentUser = null;
 let editingMuridId = null, editingGuruId = null, editingKelasId = null, activeDetailSessionId = null;
 let gasUrl = '';
+let pendingFotoAction = null; // null = tidak ada perubahan, 'set' = ada foto baru, 'delete' = hapus foto
+let pendingFotoDataUrl = null; // data URL base64 hasil resize, siap diupload saat simpan
+let cameraStream = null;
 
 /* ================= LOCAL STORAGE HELPERS (akun login & pengaturan saja) ================= */
 async function getList(key){
@@ -633,6 +661,17 @@ async function gasDelete(sheetName, idVal){
     return await res.json();
   }catch(e){ console.error('gasDelete failed', sheetName, e); showToast('Gagal menghapus di Google Sheets.'); return {success:false}; }
 }
+async function gasUploadFoto(dataUrl, filename){
+  if(!gasUrl){ showToast('URL Google Sheets belum diatur. Buka menu Pengaturan.'); return {success:false}; }
+  try{
+    const res = await fetch(gasUrl + '?action=uploadFoto', {
+      method:'POST', body: JSON.stringify({dataUrl, filename})
+    });
+    const json = await res.json();
+    if(!json.success){ showToast('Gagal upload foto' + (json.message?(': '+json.message):'') + '.'); }
+    return json;
+  }catch(e){ console.error('gasUploadFoto failed', e); showToast('Gagal upload foto ke Google Drive.'); return {success:false}; }
+}
 
 /* ---- mapping: model internal <-> baris Google Sheets ---- */
 function sheetToMurid(row){
@@ -641,7 +680,8 @@ function sheetToMurid(row){
   return {
     id: nis, nis, nama: row['Nama Siswa']||'', tglLahir: row['Tanggal Lahir']||'',
     kelasId: kelas?kelas.id:'', tglGabung: row['Tanggal Gabung']||'', tglJenjang: row['Tanggal Jenjang di Kelas']||'',
-    alamat: row['Alamat']||'', rw: row['RW']||'', kelurahan: row['Kelurahan']||'', namaOrtu: row['Nama Orang Tua']||''
+    alamat: row['Alamat']||'', rw: row['RW']||'', kelurahan: row['Kelurahan']||'', namaOrtu: row['Nama Orang Tua']||'',
+    fotoUrl: row['Foto URL']||''
   };
 }
 function muridToSheet(m){
@@ -649,7 +689,8 @@ function muridToSheet(m){
   return {
     'Nomor Siswa': m.nis, 'Nama Siswa': m.nama, 'Tanggal Lahir': m.tglLahir||'',
     'Kelas': kelas?kelas.nomor:'', 'Tanggal Gabung': m.tglGabung||'', 'Tanggal Jenjang di Kelas': m.tglJenjang||'',
-    'Alamat': m.alamat||'', 'RW': m.rw||'', 'Kelurahan': m.kelurahan||'', 'Nama Orang Tua': m.namaOrtu||''
+    'Alamat': m.alamat||'', 'RW': m.rw||'', 'Kelurahan': m.kelurahan||'', 'Nama Orang Tua': m.namaOrtu||'',
+    'Foto URL': m.fotoUrl||''
   };
 }
 function sheetToGuru(row){
@@ -783,7 +824,7 @@ function refreshAllViews(){
 
 /* ================= MODAL HELPERS ================= */
 function openModal(id){ document.getElementById(id).classList.remove('hidden'); }
-function closeModal(id){ document.getElementById(id).classList.add('hidden'); }
+function closeModal(id){ document.getElementById(id).classList.add('hidden'); if(id==='muridModal') closeFotoCamera(); }
 
 /* ================= DASHBOARD ================= */
 function renderDashboard(){
@@ -818,6 +859,7 @@ function renderKelasOptions(){
 
 function openMuridForm(id){
   editingMuridId = id || null;
+  resetFotoState();
   document.getElementById('muridModalTitle').textContent = id ? 'Edit Murid' : 'Tambah Murid';
   switchTab('identitas');
   if(id){
@@ -826,37 +868,135 @@ function openMuridForm(id){
     f_kelas.value = m.kelasId||''; f_tglgabung.value = m.tglGabung||'';
     f_tgljenjang.value = m.tglJenjang||''; f_alamat.value = m.alamat||''; f_rw.value = m.rw||'';
     f_kelurahan.value = m.kelurahan||''; f_namaortu.value = m.namaOrtu||'';
+    renderFotoPreview(m.fotoUrl||'');
   } else {
     resetMuridForm();
     f_nis.value = generateNIS();
+    renderFotoPreview('');
   }
   openModal('muridModal');
 }
 function generateNIS(){
-  const year = new Date().getFullYear();
-  const seq = (muridList.length + 1).toString().padStart(3,'0');
-  return year + seq;
+  const year = new Date().getFullYear().toString();
+  const usedSeqs = muridList
+    .map(m => (m.nis||'').toString())
+    .filter(nis => nis.startsWith(year) && nis.length === year.length + 3)
+    .map(nis => parseInt(nis.slice(year.length), 10))
+    .filter(n => !isNaN(n));
+  const nextSeq = (usedSeqs.length ? Math.max(...usedSeqs) : 0) + 1;
+  return year + nextSeq.toString().padStart(3,'0');
 }
 function resetMuridForm(){
   ['f_nama','f_tgllahir','f_tglgabung','f_tgljenjang','f_alamat','f_rw','f_kelurahan','f_namaortu'].forEach(id=>document.getElementById(id).value='');
   f_kelas.value='';
+  resetFotoState();
+  const m = editingMuridId ? muridList.find(x=>x.id===editingMuridId) : null;
+  renderFotoPreview(m ? (m.fotoUrl||'') : '');
 }
 function switchTab(name){
   document.querySelectorAll('.tabs-nav button').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.toggle('active', p.dataset.panel===name));
 }
 
+/* ================= FOTO MURID ================= */
+function resetFotoState(){
+  pendingFotoAction = null;
+  pendingFotoDataUrl = null;
+  closeFotoCamera();
+  const fi = document.getElementById('fotoFileInput'); if(fi) fi.value = '';
+}
+function renderFotoPreview(url){
+  const img = document.getElementById('fotoPreviewImg');
+  const empty = document.getElementById('fotoPreviewEmpty');
+  if(url){ img.src = url; img.classList.remove('hidden'); empty.classList.add('hidden'); }
+  else { img.src = ''; img.classList.add('hidden'); empty.classList.remove('hidden'); }
+}
+/** Crop tengah jadi persegi lalu resize ke w x h, hasil dikirim via callback sebagai data URL JPEG. */
+function resizeImageToDataUrl(srcDataUrl, w, h, cb){
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    const side = Math.min(img.width, img.height);
+    const sx = (img.width - side) / 2, sy = (img.height - side) / 2;
+    ctx.drawImage(img, sx, sy, side, side, 0, 0, w, h);
+    cb(canvas.toDataURL('image/jpeg', 0.85));
+  };
+  img.src = srcDataUrl;
+}
+function handleFotoFile(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  if(!['image/jpeg','image/png','image/webp'].includes(file.type)){
+    showToast('Format foto harus JPG, PNG, atau WEBP.');
+    e.target.value = '';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => resizeImageToDataUrl(reader.result, 320, 320, (resized) => {
+    pendingFotoAction = 'set';
+    pendingFotoDataUrl = resized;
+    renderFotoPreview(resized);
+  });
+  reader.readAsDataURL(file);
+  e.target.value = '';
+}
+async function openFotoCamera(){
+  try{
+    cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+    document.getElementById('fotoCameraVideo').srcObject = cameraStream;
+    document.getElementById('fotoCameraWrap').classList.remove('hidden');
+  }catch(e){
+    console.error(e);
+    showToast('Tidak bisa mengakses kamera. Cek izin browser.');
+  }
+}
+function closeFotoCamera(){
+  if(cameraStream){ cameraStream.getTracks().forEach(t=>t.stop()); cameraStream = null; }
+  const wrap = document.getElementById('fotoCameraWrap'); if(wrap) wrap.classList.add('hidden');
+}
+function captureFotoFromCamera(){
+  const video = document.getElementById('fotoCameraVideo');
+  if(!video.videoWidth){ showToast('Kamera belum siap, coba lagi sebentar.'); return; }
+  const side = Math.min(video.videoWidth, video.videoHeight);
+  const canvas = document.createElement('canvas');
+  canvas.width = side; canvas.height = side;
+  canvas.getContext('2d').drawImage(video, (video.videoWidth-side)/2, (video.videoHeight-side)/2, side, side, 0, 0, side, side);
+  resizeImageToDataUrl(canvas.toDataURL('image/jpeg', 0.9), 320, 320, (resized) => {
+    pendingFotoAction = 'set';
+    pendingFotoDataUrl = resized;
+    renderFotoPreview(resized);
+  });
+  closeFotoCamera();
+}
+function deleteFotoMurid(){
+  pendingFotoAction = 'delete';
+  pendingFotoDataUrl = null;
+  renderFotoPreview('');
+}
+
 async function saveMurid(closeAfter){
   const nama = f_nama.value.trim();
   if(!nama){ showToast('Nama lengkap wajib diisi.'); switchTab('identitas'); return; }
   const nis = f_nis.value;
+  const existing = editingMuridId ? muridList.find(m=>m.id===editingMuridId) : null;
+  let fotoUrl = existing ? (existing.fotoUrl || '') : '';
+  if(pendingFotoAction === 'set' && pendingFotoDataUrl){
+    showToast('Mengunggah foto ke Google Drive...');
+    const up = await gasUploadFoto(pendingFotoDataUrl, 'siswa_' + nis + '_' + Date.now() + '.jpg');
+    if(up && up.success && up.url){ fotoUrl = up.url; }
+    else { showToast('Gagal upload foto, data lain tetap disimpan tanpa foto baru.'); }
+  } else if(pendingFotoAction === 'delete'){
+    fotoUrl = '';
+  }
   const data = {
     id: nis,
     nis, nama, tglLahir: f_tgllahir.value,
     kelasId: f_kelas.value, tglGabung: f_tglgabung.value, tglJenjang: f_tgljenjang.value,
     alamat: f_alamat.value.trim(), rw: f_rw.value.trim(), kelurahan: f_kelurahan.value.trim(),
-    namaOrtu: f_namaortu.value.trim(),
-    createdAt: editingMuridId ? (muridList.find(m=>m.id===editingMuridId)||{}).createdAt || Date.now() : Date.now()
+    namaOrtu: f_namaortu.value.trim(), fotoUrl,
+    createdAt: editingMuridId ? (existing||{}).createdAt || Date.now() : Date.now()
   };
   if(editingMuridId){
     muridList = muridList.map(m => m.id===editingMuridId ? data : m);
@@ -865,6 +1005,7 @@ async function saveMurid(closeAfter){
   }
   const res = await gasUpsert('Siswa', muridToSheet(data));
   if(res && res.success){ showToast('Data murid tersimpan ke Google Sheets.'); }
+  pendingFotoAction = null; pendingFotoDataUrl = null;
   renderMurid(); renderDashboard();
   if(closeAfter){ closeModal('muridModal'); }
   else { editingMuridId = data.id; }
@@ -880,6 +1021,7 @@ function renderMurid(){
   document.getElementById('muridEmpty').classList.toggle('hidden', rows.length>0);
   document.getElementById('muridTableBody').innerHTML = rows.map(m => `
     <tr>
+      <td>${m.fotoUrl ? `<img class="thumb" src="${m.fotoUrl}" alt="">` : `<div class="thumb" style="display:flex;align-items:center;justify-content:center;color:#7ba0e0;font-weight:700;">${escapeHtml((m.nama||'?').charAt(0).toUpperCase())}</div>`}</td>
       <td>${m.nis}</td>
       <td><b>${escapeHtml(m.nama)}</b></td>
       <td>${m.tglLahir||'-'}</td>
@@ -907,6 +1049,7 @@ function printMurid(id){
     <div style="font-family:Arial;max-width:600px;">
       <h2 style="margin-bottom:0;">Biodata Murid</h2>
       <div style="color:#555;margin-bottom:16px;">SMP IT Cerdas Berkarakter — Yayasan Sekolah</div>
+      ${m.fotoUrl ? `<img src="${m.fotoUrl}" style="width:120px;height:120px;object-fit:cover;border-radius:8px;margin-bottom:12px;">` : ''}
       <table style="width:100%;border-collapse:collapse;">
         ${printRow('Nomor Siswa', m.nis)}
         ${printRow('Nama Siswa', m.nama)}
@@ -1017,10 +1160,19 @@ function openGuruForm(id){
     g_nomor.value = g.nomor; g_nama.value = g.nama; g_jenjang.value = g.jenjang||'';
     g_kelurahan.value = g.kelurahan||''; g_username.value = acc.username||''; g_password.value = acc.password||'';
   } else {
-    g_nomor.value = 'G' + (guruList.length+1).toString().padStart(3,'0');
+    g_nomor.value = generateNomorGuru();
     g_nama.value=''; g_jenjang.value=''; g_kelurahan.value=''; g_username.value=''; g_password.value='';
   }
   openModal('guruModal');
+}
+function generateNomorGuru(){
+  const usedSeqs = guruList
+    .map(g => (g.nomor||'').toString())
+    .filter(n => n.startsWith('G'))
+    .map(n => parseInt(n.slice(1), 10))
+    .filter(n => !isNaN(n));
+  const nextSeq = (usedSeqs.length ? Math.max(...usedSeqs) : 0) + 1;
+  return 'G' + nextSeq.toString().padStart(3,'0');
 }
 async function saveGuru(){
   const nama = g_nama.value.trim();
