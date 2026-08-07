@@ -600,25 +600,20 @@
 let accounts = [], muridList = [], guruList = [], kelasList = [], kehadiranList = [], detailList = [];
 let currentUser = null;
 let editingMuridId = null, editingGuruId = null, editingKelasId = null, activeDetailSessionId = null;
-let gasUrl = '';
+const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbxsXWxLP5q6Nsq68Zc5JCK0HzOPNWKOHIcFuAhhCvcyGb29kvRqIYklhvPs9yypoTPShQ/exec';
+let gasUrl = DEFAULT_GAS_URL;
 let pendingFotoAction = null; // null = tidak ada perubahan, 'set' = ada foto baru, 'delete' = hapus foto
 let pendingFotoDataUrl = null; // data URL base64 hasil resize, siap diupload saat simpan
 let cameraStream = null;
 
-/* ================= LOCAL STORAGE HELPERS (akun login & pengaturan saja) ================= */
-async function getList(key){
-  try{
-    const r = await window.storage.get(key, true);
-    return r && r.value ? JSON.parse(r.value) : [];
-  }catch(e){ return []; }
-}
-async function setList(key, arr){
-  try{ await window.storage.set(key, JSON.stringify(arr), true); }
-  catch(e){ console.error('storage set failed', key, e); showToast('Gagal menyimpan ke penyimpanan.'); }
-}
+/* ================= LOCAL STORAGE HELPERS (URL Apps Script saja) ================= */
+const DEFAULT_ADMIN = {id:'acc-admin', username:'admin', password:'admin123', role:'admin', nama:'Administrator'};
 async function loadGasUrl(){
-  try{ const r = await window.storage.get('gasUrl', true); gasUrl = (r && r.value) ? r.value : ''; }
-  catch(e){ gasUrl = ''; }
+  // Hardcoded jadi default supaya jalan otomatis walau di-deploy ke domain sendiri
+  // (window.storage cuma ada di Claude artifact preview). Kalau ada nilai tersimpan
+  // di window.storage (mis. diganti manual lewat menu Pengaturan di preview), pakai itu.
+  try{ const r = await window.storage.get('gasUrl', true); gasUrl = (r && r.value) ? r.value : DEFAULT_GAS_URL; }
+  catch(e){ gasUrl = DEFAULT_GAS_URL; }
 }
 async function saveGasUrl(url){
   gasUrl = url.trim();
@@ -732,8 +727,16 @@ function detailToSheet(d){
   return { 'ID': d.id, 'ID Data Kehadiran': d.kehadiranId, 'Nomor Grup Kelas': kelas?kelas.nomor:'', 'Nomor Siswa': d.muridId, 'Kehadiran': d.hadir, 'Keterangan': d.keterangan||'' };
 }
 
-/** urutan penting: Guru & Kelas dulu, baru Siswa/Kehadiran/Detail (butuh referensi silang). */
+function sheetToAkun(row){
+  return { id: row['ID'], username: row['Username']||'', password: row['Password']||'', role: row['Role']||'guru', nama: row['Nama']||'' };
+}
+function akunToSheet(a){
+  return { 'ID': a.id, 'Username': a.username, 'Password': a.password, 'Role': a.role, 'Nama': a.nama };
+}
+
+/** urutan penting: Akun & Guru & Kelas dulu, baru Siswa/Kehadiran/Detail (butuh referensi silang). */
 async function loadAllFromSheets(){
+  accounts = (await gasList('Akun')).map(sheetToAkun);
   guruList = (await gasList('Guru')).map(sheetToGuru);
   kelasList = (await gasList('Kelas')).map(sheetToKelas);
   muridList = (await gasList('Siswa')).map(sheetToMurid);
@@ -744,12 +747,17 @@ async function loadAllFromSheets(){
 /* ================= BOOT ================= */
 async function boot(){
   await loadGasUrl();
-  accounts = await getList('accounts');
-  if(accounts.length === 0){
-    accounts = [{id:'acc-admin', username:'admin', password:'admin123', role:'admin', nama:'Administrator'}];
-    await setList('accounts', accounts);
+  if(gasUrl){
+    await loadAllFromSheets();
+    if(accounts.length === 0){
+      accounts = [DEFAULT_ADMIN];
+      await gasUpsert('Akun', akunToSheet(DEFAULT_ADMIN));
+    }
+  } else {
+    // gasUrl belum diatur (misal baru pertama kali deploy) — tetap bisa login sebagai admin
+    // default supaya bisa buka menu Pengaturan dan isi URL-nya.
+    accounts = [DEFAULT_ADMIN];
   }
-  if(gasUrl){ await loadAllFromSheets(); }
 }
 boot();
 
@@ -803,6 +811,10 @@ async function savePengaturanUrl(){
   await saveGasUrl(url);
   showToast('URL tersimpan. Memuat data dari Google Sheets...');
   await loadAllFromSheets();
+  if(accounts.length === 0){
+    accounts = [DEFAULT_ADMIN];
+    await gasUpsert('Akun', akunToSheet(DEFAULT_ADMIN));
+  }
   refreshAllViews();
 }
 async function testGasConnection(){
@@ -1185,14 +1197,17 @@ async function saveGuru(){
     id: nomor, nomor, nama,
     jenjang: g_jenjang.value.trim(), kelurahan: g_kelurahan.value.trim()
   };
+  let accRecord;
   if(editingGuruId){
     guruList = guruList.map(g => g.id===editingGuruId ? data : g);
-    accounts = accounts.map(a => a.id === 'acc-'+editingGuruId ? {...a, username, password:g_password.value, nama} : a);
+    accRecord = {id:'acc-'+editingGuruId, username, password:g_password.value, role:'guru', nama};
+    accounts = accounts.map(a => a.id === 'acc-'+editingGuruId ? accRecord : a);
   } else {
     guruList.push(data);
-    accounts.push({id:'acc-'+data.id, username, password:g_password.value, role:'guru', nama});
+    accRecord = {id:'acc-'+data.id, username, password:g_password.value, role:'guru', nama};
+    accounts.push(accRecord);
   }
-  await setList('accounts', accounts);
+  await gasUpsert('Akun', akunToSheet(accRecord));
   const res = await gasUpsert('Guru', guruToSheet(data));
   if(res && res.success){ showToast('Data guru tersimpan ke Google Sheets.'); }
   renderGuru(); renderDashboard(); closeModal('guruModal');
@@ -1338,7 +1353,7 @@ function confirmDelete(type, id){
     if(type==='murid'){ muridList = muridList.filter(m=>m.id!==id); await gasDelete('Siswa', id); renderMurid(); }
     if(type==='guru'){
       guruList = guruList.filter(g=>g.id!==id); await gasDelete('Guru', id);
-      accounts = accounts.filter(a=>a.id!=='acc-'+id); await setList('accounts', accounts);
+      accounts = accounts.filter(a=>a.id!=='acc-'+id); await gasDelete('Akun', 'acc-'+id);
       renderGuru();
     }
     if(type==='kelas'){ kelasList = kelasList.filter(k=>k.id!==id); await gasDelete('Kelas', id); renderKelasOptions(); renderKelas(); }
