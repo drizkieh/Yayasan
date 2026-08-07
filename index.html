@@ -288,7 +288,7 @@
         <div class="card">
           <div class="eyebrow">Murid Terbaru</div>
           <table>
-            <thead><tr><th>NIS</th><th>Nama</th><th>Kelas</th><th>Status</th></tr></thead>
+            <thead><tr><th>Nomor Siswa</th><th>Nama Siswa</th><th>Kelas</th><th>Nama Orang Tua</th></tr></thead>
             <tbody id="dashboardRecent"></tbody>
           </table>
         </div>
@@ -307,22 +307,23 @@
             <div class="left">
               <button class="btn btn-primary" onclick="openMuridForm()">+ Tambah Murid</button>
               <button class="btn btn-outline" onclick="printAllMurid()">&#128424; Print Daftar</button>
+              <button class="btn btn-outline" onclick="exportMuridCSV()">&#11015; Export CSV (utk Google Sheets)</button>
             </div>
             <div class="right">
               <input class="search-input" id="muridSearch" placeholder="Cari murid..." oninput="renderMurid()">
               <select class="search-input" id="muridFilterKelas" onchange="renderMurid()"><option value="">Semua Kelas</option></select>
-              <select class="search-input" id="muridFilterStatus" onchange="renderMurid()">
-                <option value="">Semua Status</option><option value="Aktif">Aktif</option><option value="Nonaktif">Nonaktif</option>
-              </select>
             </div>
           </div>
+          <div style="overflow-x:auto;">
           <table>
             <thead><tr>
-              <th>Foto</th><th>NIS</th><th>Nama Murid</th><th>JK</th><th>Tgl Lahir</th><th>Kelas</th>
-              <th>Tgl Gabung</th><th>Nama Orang Tua</th><th>Alamat</th><th>Status</th><th>Aksi</th>
+              <th>Nomor Siswa</th><th>Nama Siswa</th><th>Tanggal Lahir</th><th>Kelas</th>
+              <th>Tanggal Gabung</th><th>Tanggal Jenjang di Kelas</th><th>Alamat</th><th>RW</th>
+              <th>Kelurahan</th><th>Nama Orang Tua</th><th>Aksi</th>
             </tr></thead>
             <tbody id="muridTableBody"></tbody>
           </table>
+          </div>
           <div id="muridEmpty" class="empty-state hidden">Belum ada data murid. Klik "Tambah Murid" untuk mulai.</div>
         </div>
       </div>
@@ -334,11 +335,14 @@
         </div>
         <div class="card">
           <div class="toolbar">
-            <div class="left"><button class="btn btn-primary admin-only" onclick="openGuruForm()">+ Tambah Guru</button></div>
+            <div class="left">
+              <button class="btn btn-primary admin-only" onclick="openGuruForm()">+ Tambah Guru</button>
+              <button class="btn btn-outline admin-only" onclick="exportGuruCSV()">&#11015; Export CSV (utk Google Sheets)</button>
+            </div>
             <div class="right"><input class="search-input" id="guruSearch" placeholder="Cari guru..." oninput="renderGuru()"></div>
           </div>
           <table>
-            <thead><tr><th>No. Induk</th><th>Nama Guru</th><th>Jenjang</th><th>Kelurahan Domisili</th><th>Username</th><th>Aksi</th></tr></thead>
+            <thead><tr><th>Nomor Induk Guru</th><th>Nama Guru</th><th>Kelurahan Domisili</th><th>Jenjang</th><th>Username</th><th>Aksi</th></tr></thead>
             <tbody id="guruTableBody"></tbody>
           </table>
           <div id="guruEmpty" class="empty-state hidden">Belum ada data guru.</div>
@@ -352,10 +356,13 @@
         </div>
         <div class="card">
           <div class="toolbar">
-            <div class="left"><button class="btn btn-primary" onclick="openKelasForm()">+ Tambah Kelas</button></div>
+            <div class="left">
+              <button class="btn btn-primary" onclick="openKelasForm()">+ Tambah Kelas</button>
+              <button class="btn btn-outline" onclick="exportKelasCSV()">&#11015; Export CSV (utk Google Sheets)</button>
+            </div>
           </div>
           <table>
-            <thead><tr><th>No. Grup Kelas</th><th>Nama Kelas</th><th>Wali Kelas</th><th>Jumlah Siswa</th><th>Aksi</th></tr></thead>
+            <thead><tr><th>ID</th><th>Nomor Grup Kelas</th><th>Nama Kelas</th><th>Nomor Induk Guru</th><th>Nama Guru</th><th>Nomor Siswa</th><th>Aksi</th></tr></thead>
             <tbody id="kelasTableBody"></tbody>
           </table>
           <div id="kelasEmpty" class="empty-state hidden">Belum ada data kelas.</div>
@@ -369,10 +376,14 @@
         </div>
         <div class="card">
           <div class="toolbar">
-            <div class="left"><button class="btn btn-primary" onclick="openKehadiranForm()">+ Buat Sesi Kelas</button></div>
+            <div class="left">
+              <button class="btn btn-primary" onclick="openKehadiranForm()">+ Buat Sesi Kelas</button>
+              <button class="btn btn-outline" onclick="exportKehadiranCSV()">&#11015; Export Sesi CSV</button>
+              <button class="btn btn-outline" onclick="exportKehadiranDetailCSV()">&#11015; Export Detail CSV</button>
+            </div>
           </div>
           <table>
-            <thead><tr><th>Tanggal</th><th>Jam</th><th>Kelas</th><th>Materi</th><th>Kegiatan</th><th>Terisi</th><th>Aksi</th></tr></thead>
+            <thead><tr><th>ID</th><th>Nomor Grup Kelas</th><th>Tanggal Kelas</th><th>Jam Kelas</th><th>Materi Kelas</th><th>Kegiatan</th><th>Terisi</th><th>Aksi</th></tr></thead>
             <tbody id="kehadiranTableBody"></tbody>
           </table>
           <div id="kehadiranEmpty" class="empty-state hidden">Belum ada sesi kehadiran.</div>
@@ -397,23 +408,14 @@
           <button data-tab="kelasinfo" onclick="switchTab('kelasinfo')">&#127891; Kelas & Jenjang</button>
           <button data-tab="alamat" onclick="switchTab('alamat')">&#128205; Alamat</button>
           <button data-tab="ortu" onclick="switchTab('ortu')">&#128101; Orang Tua</button>
-          <button data-tab="foto" onclick="switchTab('foto')">&#128247; Foto</button>
         </div>
         <div style="flex:1;min-width:0;">
           <div class="tab-panel active" data-panel="identitas">
             <div class="eyebrow">Identitas</div>
             <div class="form-grid">
-              <div class="field"><label>Nomor Induk Siswa (NIS)</label><input id="f_nis" placeholder="Auto Generate" readonly style="background:#f8fafc;"></div>
-              <div class="field"><label>Nama Lengkap</label><input id="f_nama"></div>
-              <div class="field"><label>Nama Panggilan</label><input id="f_panggilan"></div>
-              <div class="field"><label>Jenis Kelamin</label>
-                <select id="f_jk"><option value="">Pilih jenis kelamin</option><option>Laki-laki</option><option>Perempuan</option></select>
-              </div>
-              <div class="field"><label>Tempat Lahir</label><input id="f_tempatlahir"></div>
+              <div class="field"><label>Nomor Siswa</label><input id="f_nis" placeholder="Auto Generate" readonly style="background:#f8fafc;"></div>
+              <div class="field"><label>Nama Siswa</label><input id="f_nama"></div>
               <div class="field"><label>Tanggal Lahir</label><input type="date" id="f_tgllahir"></div>
-              <div class="field"><label>Status</label>
-                <select id="f_status"><option>Aktif</option><option>Nonaktif</option></select>
-              </div>
             </div>
           </div>
           <div class="tab-panel" data-panel="kelasinfo">
@@ -437,25 +439,7 @@
           <div class="tab-panel" data-panel="ortu">
             <div class="eyebrow">Orang Tua</div>
             <div class="form-grid">
-              <div class="field"><label>Nama Orang Tua</label><input id="f_namaortu"></div>
-              <div class="field"><label>No. HP Orang Tua</label><input id="f_hportu"></div>
-            </div>
-          </div>
-          <div class="tab-panel" data-panel="foto">
-            <div class="eyebrow">Foto Murid</div>
-            <div class="photo-box">
-              <div class="photo-preview" id="fotoPreview">Belum ada foto<br>JPG/PNG, maks 2MB</div>
-              <div class="photo-actions">
-                <button class="btn btn-outline" onclick="document.getElementById('fotoInput').click()">&#128190; Upload Foto</button>
-                <input type="file" id="fotoInput" accept="image/*" class="hidden" onchange="handleFotoUpload(event)">
-                <button class="btn btn-outline" onclick="openCamera()">&#128247; Ambil Foto</button>
-                <button class="btn btn-red" onclick="deleteFoto()">&#128465; Hapus Foto</button>
-              </div>
-              <div id="camWrap" class="hidden" style="text-align:center;">
-                <video id="camVideo" autoplay playsinline></video><br>
-                <button class="btn btn-primary" style="margin-top:8px;" onclick="capturePhoto()">Jepret</button>
-                <button class="btn btn-outline" style="margin-top:8px;" onclick="closeCamera()">Batal</button>
-              </div>
+              <div class="field full"><label>Nama Orang Tua</label><input id="f_namaortu"></div>
             </div>
           </div>
         </div>
@@ -477,8 +461,11 @@
     <div class="modal-body">
       <div class="field"><label>Nomor Induk Guru</label><input id="g_nomor" placeholder="Auto generate" readonly style="background:#f8fafc;"></div>
       <div class="field"><label>Nama Guru</label><input id="g_nama"></div>
-      <div class="field"><label>Jenjang Mengajar</label><input id="g_jenjang" placeholder="mis. VII, VIII"></div>
       <div class="field"><label>Kelurahan Domisili</label><input id="g_kelurahan"></div>
+      <div class="field"><label>Jenjang</label><input id="g_jenjang" placeholder="mis. VII, VIII"></div>
+      <div style="border-top:1px dashed var(--line);margin:14px 0 10px;padding-top:10px;">
+        <div class="eyebrow" style="margin-bottom:8px;">Akun Login (tidak ikut ke Google Sheets)</div>
+      </div>
       <div class="field"><label>Username Login</label><input id="g_username"></div>
       <div class="field"><label>Password Login</label><input id="g_password" type="text" placeholder="Password akun guru"></div>
     </div>
@@ -566,7 +553,7 @@
 let accounts = [], muridList = [], guruList = [], kelasList = [], kehadiranList = [], detailList = [];
 let currentUser = null;
 let editingMuridId = null, editingGuruId = null, editingKelasId = null, activeDetailSessionId = null;
-let camStream = null, pendingFoto = null;
+
 
 /* ================= STORAGE HELPERS ================= */
 async function getList(key){
@@ -652,7 +639,7 @@ function refreshAllViews(){
 
 /* ================= MODAL HELPERS ================= */
 function openModal(id){ document.getElementById(id).classList.remove('hidden'); }
-function closeModal(id){ document.getElementById(id).classList.add('hidden'); if(id==='muridModal') closeCamera(); }
+function closeModal(id){ document.getElementById(id).classList.add('hidden'); }
 
 /* ================= DASHBOARD ================= */
 function renderDashboard(){
@@ -663,7 +650,7 @@ function renderDashboard(){
   const recent = [...muridList].sort((a,b)=> (b.createdAt||0)-(a.createdAt||0)).slice(0,5);
   document.getElementById('dashboardRecent').innerHTML = recent.length ? recent.map(m => `
     <tr><td>${m.nis}</td><td>${escapeHtml(m.nama)}</td><td>${escapeHtml(kelasLabel(m.kelasId))}</td>
-    <td><span class="badge-pill ${m.status==='Aktif'?'badge-green':'badge-gray'}">${m.status}</span></td></tr>
+    <td>${escapeHtml(m.namaOrtu)||'-'}</td></tr>
   `).join('') : '<tr><td colspan="4" style="text-align:center;color:var(--ink-400);">Belum ada data murid</td></tr>';
 }
 
@@ -691,13 +678,10 @@ function openMuridForm(id){
   switchTab('identitas');
   if(id){
     const m = muridList.find(x=>x.id===id);
-    f_nis.value = m.nis; f_nama.value = m.nama; f_panggilan.value = m.panggilan||'';
-    f_jk.value = m.jk||''; f_tempatlahir.value = m.tempatLahir||''; f_tgllahir.value = m.tglLahir||'';
-    f_status.value = m.status||'Aktif'; f_kelas.value = m.kelasId||''; f_tglgabung.value = m.tglGabung||'';
+    f_nis.value = m.nis; f_nama.value = m.nama; f_tgllahir.value = m.tglLahir||'';
+    f_kelas.value = m.kelasId||''; f_tglgabung.value = m.tglGabung||'';
     f_tgljenjang.value = m.tglJenjang||''; f_alamat.value = m.alamat||''; f_rw.value = m.rw||'';
-    f_kelurahan.value = m.kelurahan||''; f_namaortu.value = m.namaOrtu||''; f_hportu.value = m.hpOrtu||'';
-    pendingFoto = m.foto || null;
-    renderFotoPreview();
+    f_kelurahan.value = m.kelurahan||''; f_namaortu.value = m.namaOrtu||'';
   } else {
     resetMuridForm();
     f_nis.value = generateNIS();
@@ -710,10 +694,8 @@ function generateNIS(){
   return year + seq;
 }
 function resetMuridForm(){
-  ['f_nama','f_panggilan','f_tempatlahir','f_tgllahir','f_tglgabung','f_tgljenjang','f_alamat','f_rw','f_kelurahan','f_namaortu','f_hportu'].forEach(id=>document.getElementById(id).value='');
-  f_jk.value=''; f_status.value='Aktif'; f_kelas.value='';
-  pendingFoto = null;
-  renderFotoPreview();
+  ['f_nama','f_tgllahir','f_tglgabung','f_tgljenjang','f_alamat','f_rw','f_kelurahan','f_namaortu'].forEach(id=>document.getElementById(id).value='');
+  f_kelas.value='';
 }
 function switchTab(name){
   document.querySelectorAll('.tabs-nav button').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
@@ -725,11 +707,10 @@ async function saveMurid(closeAfter){
   if(!nama){ showToast('Nama lengkap wajib diisi.'); switchTab('identitas'); return; }
   const data = {
     id: editingMuridId || 'm-' + Date.now(),
-    nis: f_nis.value, nama, panggilan: f_panggilan.value.trim(), jk: f_jk.value,
-    tempatLahir: f_tempatlahir.value.trim(), tglLahir: f_tgllahir.value,
-    status: f_status.value, kelasId: f_kelas.value, tglGabung: f_tglgabung.value, tglJenjang: f_tgljenjang.value,
+    nis: f_nis.value, nama, tglLahir: f_tgllahir.value,
+    kelasId: f_kelas.value, tglGabung: f_tglgabung.value, tglJenjang: f_tgljenjang.value,
     alamat: f_alamat.value.trim(), rw: f_rw.value.trim(), kelurahan: f_kelurahan.value.trim(),
-    namaOrtu: f_namaortu.value.trim(), hpOrtu: f_hportu.value.trim(), foto: pendingFoto,
+    namaOrtu: f_namaortu.value.trim(),
     createdAt: editingMuridId ? (muridList.find(m=>m.id===editingMuridId)||{}).createdAt || Date.now() : Date.now()
   };
   if(editingMuridId){
@@ -747,24 +728,23 @@ async function saveMurid(closeAfter){
 function renderMurid(){
   const q = (document.getElementById('muridSearch').value||'').toLowerCase();
   const fk = document.getElementById('muridFilterKelas').value;
-  const fs = document.getElementById('muridFilterStatus').value;
   let rows = muridList.filter(m =>
     (!q || m.nama.toLowerCase().includes(q) || (m.nis||'').includes(q)) &&
-    (!fk || m.kelasId===fk) && (!fs || m.status===fs)
+    (!fk || m.kelasId===fk)
   );
   document.getElementById('muridEmpty').classList.toggle('hidden', rows.length>0);
   document.getElementById('muridTableBody').innerHTML = rows.map(m => `
     <tr>
-      <td>${m.foto ? `<img class="thumb" src="${m.foto}">` : `<div class="thumb"></div>`}</td>
       <td>${m.nis}</td>
-      <td><b>${escapeHtml(m.nama)}</b>${m.panggilan?'<br><span style="color:var(--ink-400);font-size:11.5px;">'+escapeHtml(m.panggilan)+'</span>':''}</td>
-      <td>${m.jk||'-'}</td>
+      <td><b>${escapeHtml(m.nama)}</b></td>
       <td>${m.tglLahir||'-'}</td>
       <td>${escapeHtml(kelasLabel(m.kelasId))}</td>
       <td>${m.tglGabung||'-'}</td>
-      <td>${escapeHtml(m.namaOrtu)||'-'}</td>
+      <td>${m.tglJenjang||'-'}</td>
       <td>${escapeHtml(m.alamat)||'-'}</td>
-      <td><span class="badge-pill ${m.status==='Aktif'?'badge-green':'badge-gray'}">${m.status}</span></td>
+      <td>${escapeHtml(m.rw)||'-'}</td>
+      <td>${escapeHtml(m.kelurahan)||'-'}</td>
+      <td>${escapeHtml(m.namaOrtu)||'-'}</td>
       <td><div class="icon-row">
         <button class="btn-ghost" title="Edit" onclick="openMuridForm('${m.id}')">&#9998;</button>
         <button class="btn-ghost" title="Print" onclick="printMurid('${m.id}')">&#128424;</button>
@@ -772,56 +752,6 @@ function renderMurid(){
       </div></td>
     </tr>
   `).join('');
-}
-
-/* ---- foto ---- */
-function renderFotoPreview(){
-  const box = document.getElementById('fotoPreview');
-  box.innerHTML = pendingFoto ? `<img src="${pendingFoto}">` : 'Belum ada foto<br>JPG/PNG, maks 2MB';
-}
-function handleFotoUpload(ev){
-  const file = ev.target.files[0];
-  if(!file) return;
-  if(file.size > 2*1024*1024){ showToast('Ukuran foto maksimal 2MB.'); return; }
-  const reader = new FileReader();
-  reader.onload = e => resizeAndSet(e.target.result);
-  reader.readAsDataURL(file);
-  ev.target.value = '';
-}
-function resizeAndSet(dataUrl){
-  const img = new Image();
-  img.onload = () => {
-    const size = 320;
-    const canvas = document.createElement('canvas');
-    canvas.width = size; canvas.height = size;
-    const ctx = canvas.getContext('2d');
-    const ratio = Math.max(size/img.width, size/img.height);
-    const w = img.width*ratio, h = img.height*ratio;
-    ctx.drawImage(img, (size-w)/2, (size-h)/2, w, h);
-    pendingFoto = canvas.toDataURL('image/jpeg', 0.82);
-    renderFotoPreview();
-  };
-  img.src = dataUrl;
-}
-function deleteFoto(){ pendingFoto = null; renderFotoPreview(); }
-async function openCamera(){
-  try{
-    camStream = await navigator.mediaDevices.getUserMedia({ video: true });
-    document.getElementById('camVideo').srcObject = camStream;
-    document.getElementById('camWrap').classList.remove('hidden');
-  }catch(e){ showToast('Tidak bisa mengakses kamera.'); }
-}
-function capturePhoto(){
-  const video = document.getElementById('camVideo');
-  const canvas = document.createElement('canvas');
-  canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-  canvas.getContext('2d').drawImage(video, 0, 0);
-  resizeAndSet(canvas.toDataURL('image/jpeg', 0.9));
-  closeCamera();
-}
-function closeCamera(){
-  if(camStream){ camStream.getTracks().forEach(t=>t.stop()); camStream = null; }
-  document.getElementById('camWrap').classList.add('hidden');
 }
 
 /* ---- print murid ---- */
@@ -833,18 +763,16 @@ function printMurid(id){
       <h2 style="margin-bottom:0;">Biodata Murid</h2>
       <div style="color:#555;margin-bottom:16px;">SMP IT Cerdas Berkarakter — Yayasan Sekolah</div>
       <table style="width:100%;border-collapse:collapse;">
-        ${m.foto ? `<tr><td colspan="2" style="padding:6px 0;"><img src="${m.foto}" style="width:110px;height:110px;object-fit:cover;border-radius:8px;"></td></tr>` : ''}
-        ${printRow('NIS', m.nis)}
-        ${printRow('Nama Lengkap', m.nama)}
-        ${printRow('Nama Panggilan', m.panggilan)}
-        ${printRow('Jenis Kelamin', m.jk)}
-        ${printRow('Tempat, Tgl Lahir', (m.tempatLahir||'-') + ', ' + (m.tglLahir||'-'))}
+        ${printRow('Nomor Siswa', m.nis)}
+        ${printRow('Nama Siswa', m.nama)}
+        ${printRow('Tanggal Lahir', m.tglLahir)}
         ${printRow('Kelas', kelasLabel(m.kelasId))}
         ${printRow('Tanggal Gabung', m.tglGabung)}
-        ${printRow('Alamat', (m.alamat||'-') + (m.rw ? ' RW '+m.rw : '') + (m.kelurahan ? ', Kel. '+m.kelurahan : ''))}
+        ${printRow('Tanggal Jenjang di Kelas', m.tglJenjang)}
+        ${printRow('Alamat', m.alamat)}
+        ${printRow('RW', m.rw)}
+        ${printRow('Kelurahan', m.kelurahan)}
         ${printRow('Nama Orang Tua', m.namaOrtu)}
-        ${printRow('No. HP Orang Tua', m.hpOrtu)}
-        ${printRow('Status', m.status)}
       </table>
     </div>`;
   window.print();
@@ -859,23 +787,79 @@ function printAllMurid(){
       <div style="color:#555;margin-bottom:14px;">SMP IT Cerdas Berkarakter — Yayasan Sekolah</div>
       <table style="width:100%;border-collapse:collapse;font-size:12px;">
         <thead><tr style="background:#eee;">
-          <th style="padding:6px;text-align:left;">NIS</th><th style="padding:6px;text-align:left;">Nama</th>
-          <th style="padding:6px;text-align:left;">Kelas</th><th style="padding:6px;text-align:left;">JK</th>
-          <th style="padding:6px;text-align:left;">Orang Tua</th><th style="padding:6px;text-align:left;">Status</th>
+          <th style="padding:6px;text-align:left;">Nomor Siswa</th><th style="padding:6px;text-align:left;">Nama Siswa</th>
+          <th style="padding:6px;text-align:left;">Tanggal Lahir</th><th style="padding:6px;text-align:left;">Kelas</th>
+          <th style="padding:6px;text-align:left;">Tanggal Gabung</th><th style="padding:6px;text-align:left;">Nama Orang Tua</th>
         </tr></thead>
         <tbody>
           ${muridList.map(m=>`<tr>
             <td style="padding:6px;border-bottom:1px solid #ddd;">${m.nis}</td>
             <td style="padding:6px;border-bottom:1px solid #ddd;">${escapeHtml(m.nama)}</td>
+            <td style="padding:6px;border-bottom:1px solid #ddd;">${m.tglLahir||'-'}</td>
             <td style="padding:6px;border-bottom:1px solid #ddd;">${escapeHtml(kelasLabel(m.kelasId))}</td>
-            <td style="padding:6px;border-bottom:1px solid #ddd;">${m.jk||'-'}</td>
+            <td style="padding:6px;border-bottom:1px solid #ddd;">${m.tglGabung||'-'}</td>
             <td style="padding:6px;border-bottom:1px solid #ddd;">${escapeHtml(m.namaOrtu)||'-'}</td>
-            <td style="padding:6px;border-bottom:1px solid #ddd;">${m.status}</td>
           </tr>`).join('')}
         </tbody>
       </table>
     </div>`;
   window.print();
+}
+
+/* ---- export CSV (siap import ke Google Sheets) ---- */
+function toCSVField(v){
+  const s = (v==null?'':String(v));
+  return '"' + s.replace(/"/g,'""') + '"';
+}
+function downloadCSV(filename, rows){
+  const csv = rows.map(r => r.map(toCSVField).join(',')).join('\r\n');
+  const blob = new Blob(['\uFEFF' + csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+function exportMuridCSV(){
+  const header = ['Nomor Siswa','Nama Siswa','Tanggal Lahir','Kelas','Tanggal Gabung','Tanggal Jenjang di Kelas','Alamat','RW','Kelurahan','Nama Orang Tua'];
+  const rows = muridList.map(m => [m.nis, m.nama, m.tglLahir||'', kelasLabel(m.kelasId), m.tglGabung||'', m.tglJenjang||'', m.alamat||'', m.rw||'', m.kelurahan||'', m.namaOrtu||'']);
+  downloadCSV('data_siswa.csv', [header, ...rows]);
+  showToast('CSV siswa diunduh — tinggal import ke Google Sheets.');
+}
+function exportGuruCSV(){
+  const header = ['Nomor Induk Guru','Nama Guru','Kelurahan Domisili','Jenjang'];
+  const rows = guruList.map(g => [g.nomor, g.nama, g.kelurahan||'', g.jenjang||'']);
+  downloadCSV('data_guru.csv', [header, ...rows]);
+  showToast('CSV guru diunduh — tinggal import ke Google Sheets.');
+}
+function exportKelasCSV(){
+  const header = ['ID','Nomor Grup Kelas','Nomor Induk Guru','Nama Guru','Nomor Siswa'];
+  const rows = kelasList.map(k => {
+    const g = guruList.find(x=>x.id===k.guruId);
+    const nisList = (k.siswaIds||[]).map(sid => { const m = muridList.find(x=>x.id===sid); return m?m.nis:null; }).filter(Boolean);
+    return [k.id, k.nomor, g?g.nomor:'', g?g.nama:'', nisList.join('; ')];
+  });
+  downloadCSV('data_kelas.csv', [header, ...rows]);
+  showToast('CSV kelas diunduh — tinggal import ke Google Sheets.');
+}
+function exportKehadiranCSV(){
+  const header = ['ID','Nomor Grup Kelas','Tanggal Kelas','Jam Kelas','Materi Kelas','Kegiatan'];
+  const rows = kehadiranList.map(h => {
+    const k = kelasList.find(x=>x.id===h.kelasId);
+    return [h.id, k?k.nomor:'', h.tanggal||'', h.jam||'', h.materi||'', h.kegiatan||''];
+  });
+  downloadCSV('data_kehadiran.csv', [header, ...rows]);
+  showToast('CSV kehadiran diunduh — tinggal import ke Google Sheets.');
+}
+function exportKehadiranDetailCSV(){
+  const header = ['ID','ID Data Kehadiran','Nomor Grup Kelas','Nomor Siswa','Kehadiran','Keterangan'];
+  const rows = detailList.map(d => {
+    const k = kelasList.find(x=>x.id===d.kelasId);
+    const m = muridList.find(x=>x.id===d.muridId);
+    return [d.id, d.kehadiranId, k?k.nomor:'', m?m.nis:'', d.hadir||'', d.keterangan||''];
+  });
+  downloadCSV('data_kehadiran_detail.csv', [header, ...rows]);
+  showToast('CSV detail kehadiran diunduh — tinggal import ke Google Sheets.');
 }
 
 /* ================= DATA GURU ================= */
@@ -970,16 +954,18 @@ async function saveKelas(){
 }
 function renderKelas(){
   document.getElementById('kelasEmpty').classList.toggle('hidden', kelasList.length>0);
-  document.getElementById('kelasTableBody').innerHTML = kelasList.map(k => `
-    <tr>
-      <td>${k.nomor}</td><td><b>${escapeHtml(k.nama)}</b></td><td>${escapeHtml(guruLabel(k.guruId))}</td>
-      <td>${(k.siswaIds||[]).length} siswa</td>
+  document.getElementById('kelasTableBody').innerHTML = kelasList.map(k => {
+    const g = guruList.find(x=>x.id===k.guruId);
+    const nisList = (k.siswaIds||[]).map(sid => { const m = muridList.find(x=>x.id===sid); return m?m.nis:null; }).filter(Boolean);
+    return `<tr>
+      <td>${k.id}</td><td><b>${k.nomor}</b></td><td>${escapeHtml(k.nama)}</td><td>${g?g.nomor:'-'}</td><td>${escapeHtml(g?g.nama:'-')}</td>
+      <td>${nisList.length ? nisList.join(', ') : '-'}</td>
       <td><div class="icon-row">
         <button class="btn-ghost" onclick="openKelasForm('${k.id}')">&#9998;</button>
         <button class="btn-ghost" onclick="confirmDelete('kelas','${k.id}')">&#128465;</button>
       </div></td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
 }
 
 /* ================= KEHADIRAN ================= */
@@ -1008,8 +994,9 @@ function renderKehadiran(){
   document.getElementById('kehadiranEmpty').classList.toggle('hidden', kehadiranList.length>0);
   document.getElementById('kehadiranTableBody').innerHTML = [...kehadiranList].sort((a,b)=>(b.tanggal||'').localeCompare(a.tanggal||'')).map(h => {
     const filled = detailList.filter(d=>d.kehadiranId===h.id).length;
+    const k = kelasList.find(x=>x.id===h.kelasId);
     return `<tr>
-      <td>${h.tanggal}</td><td>${h.jam||'-'}</td><td>${escapeHtml(kelasLabel(h.kelasId))}</td>
+      <td>${h.id}</td><td>${k?k.nomor:'-'}</td><td>${h.tanggal}</td><td>${h.jam||'-'}</td>
       <td>${escapeHtml(h.materi)||'-'}</td><td>${h.kegiatan}</td><td>${filled} siswa</td>
       <td><div class="icon-row">
         <button class="btn-ghost" onclick="openDetail('${h.id}')">&#128203;</button>
