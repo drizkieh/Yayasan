@@ -502,9 +502,9 @@
           <div class="tab-panel" data-panel="foto">
             <div class="eyebrow">Foto Murid</div>
             <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;">
-              <div style="width:140px;height:140px;border-radius:12px;overflow:hidden;background:var(--blue-50);display:flex;align-items:center;justify-content:center;border:1px solid var(--line);flex-shrink:0;">
+              <div id="fotoPreviewBox" onclick="document.getElementById('fotoFileInput').click()" title="Klik untuk ganti foto" style="cursor:pointer;width:140px;height:140px;border-radius:12px;overflow:hidden;background:var(--blue-50);display:flex;align-items:center;justify-content:center;border:1px solid var(--line);flex-shrink:0;">
                 <img id="fotoPreviewImg" class="hidden" style="width:100%;height:100%;object-fit:cover;" alt="Foto murid">
-                <span id="fotoPreviewEmpty" style="color:var(--ink-400);font-size:11px;text-align:center;padding:10px;">Belum ada foto</span>
+                <span id="fotoPreviewEmpty" style="color:var(--ink-400);font-size:11px;text-align:center;padding:10px;">Klik untuk<br>tambah foto</span>
               </div>
               <div style="flex:1;min-width:220px;display:flex;flex-direction:column;gap:8px;">
                 <input type="file" id="fotoFileInput" accept="image/jpeg,image/png,image/webp" onchange="handleFotoFile(event)">
@@ -512,7 +512,7 @@
                   <button type="button" class="btn btn-outline" onclick="openFotoCamera()">&#128247; Ambil dari Kamera</button>
                   <button type="button" class="btn btn-outline" onclick="deleteFotoMurid()">&#128465; Hapus Foto</button>
                 </div>
-                <div style="font-size:11px;color:var(--ink-400);">Format JPG/PNG/WEBP. Foto otomatis di-crop persegi &amp; diresize ke 320&times;320 sebelum diunggah ke Google Drive.</div>
+                <div style="font-size:11px;color:var(--ink-400);">Format JPG/PNG/WEBP. Foto otomatis di-crop persegi &amp; diresize ke 320&times;320 sebelum diunggah ke Google Drive. Klik foto di kiri atau pilih file di atas untuk mengganti foto yang sudah ada.</div>
                 <div id="fotoCameraWrap" class="hidden">
                   <video id="fotoCameraVideo" autoplay playsinline style="width:100%;max-width:260px;border-radius:9px;background:#000;"></video>
                   <div style="display:flex;gap:8px;margin-top:6px;">
@@ -668,6 +668,15 @@ async function loadGasUrl(){
   try{ const r = await window.storage.get('gasUrl', true); gasUrl = (r && r.value) ? r.value : DEFAULT_GAS_URL; }
   catch(e){ gasUrl = DEFAULT_GAS_URL; }
 }
+
+/* ================= SESSION LOGIN (localStorage, biar tidak logout tiap refresh) ================= */
+const SESSION_KEY = 'sim_yayasan_session';
+function saveSession(acc){ try{ localStorage.setItem(SESSION_KEY, JSON.stringify({id:acc.id})); }catch(e){} }
+function clearSession(){ try{ localStorage.removeItem(SESSION_KEY); }catch(e){} }
+function loadSession(){
+  try{ const raw = localStorage.getItem(SESSION_KEY); return raw ? JSON.parse(raw) : null; }
+  catch(e){ return null; }
+}
 async function saveGasUrl(url){
   gasUrl = url.trim();
   try{ await window.storage.set('gasUrl', gasUrl, true); }catch(e){ console.error(e); }
@@ -722,12 +731,21 @@ async function gasUploadFoto(dataUrl, filename){
 }
 
 /* ---- mapping: model internal <-> baris Google Sheets ---- */
+/** Google Sheets kadang mengembalikan tanggal sebagai objek Date yang di-serialize jadi
+ * string ISO datetime penuh (mis. "2024-05-01T00:00:00.000Z") bukan "2024-05-01" murni —
+ * <input type="date"> HANYA menerima format "YYYY-MM-DD" persis, kalau tidak cocok field
+ * akan tampil KOSONG walau datanya ada. Fungsi ini ambil 10 karakter tanggal-nya saja. */
+function toDateInput(v){
+  if(!v) return '';
+  const m = String(v).match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : '';
+}
 function sheetToMurid(row){
   const nis = row['Nomor Siswa'];
   const kelas = kelasList.find(k=>k.nomor===row['Kelas']);
   return {
-    id: nis, nis, nama: row['Nama Siswa']||'', tglLahir: row['Tanggal Lahir']||'',
-    kelasId: kelas?kelas.id:'', tglGabung: row['Tanggal Gabung']||'', tglJenjang: row['Tanggal Jenjang di Kelas']||'',
+    id: nis, nis, nama: row['Nama Siswa']||'', tglLahir: toDateInput(row['Tanggal Lahir']),
+    kelasId: kelas?kelas.id:'', tglGabung: toDateInput(row['Tanggal Gabung']), tglJenjang: toDateInput(row['Tanggal Jenjang di Kelas']),
     alamat: row['Alamat']||'', rw: row['RW']||'', kelurahan: row['Kelurahan']||'', namaOrtu: row['Nama Orang Tua']||'',
     fotoUrl: row['Foto URL']||''
   };
@@ -811,12 +829,30 @@ async function boot(){
     // default supaya bisa buka menu Pengaturan dan isi URL-nya.
     accounts = [DEFAULT_ADMIN];
   }
+  // Coba pulihkan sesi login dari localStorage supaya tidak balik ke layar login tiap refresh.
+  const session = loadSession();
+  if(session){
+    const acc = accounts.find(a => a.id === session.id);
+    if(acc){ enterApp(acc); return; }
+    clearSession();
+  }
 }
 boot();
 
 function accountFor(guruId){ return accounts.find(a=>a.id==='acc-'+guruId) || {}; }
 
 /* ================= LOGIN ================= */
+function enterApp(acc){
+  currentUser = acc;
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  document.getElementById('userName').textContent = acc.nama;
+  document.getElementById('userRole').textContent = acc.role === 'admin' ? 'Administrator' : 'Guru';
+  document.getElementById('userInitial').textContent = (acc.nama||'?').charAt(0).toUpperCase();
+  document.querySelectorAll('.admin-only').forEach(el => el.style.display = acc.role === 'admin' ? '' : 'none');
+  if(!gasUrl && acc.role==='admin'){ showToast('URL Google Sheets belum diatur. Buka menu Pengaturan.'); }
+  refreshAllViews();
+}
 async function doLogin(){
   const u = document.getElementById('loginUser').value.trim();
   const p = document.getElementById('loginPass').value;
@@ -828,17 +864,11 @@ async function doLogin(){
     return;
   }
   errBox.classList.add('hidden');
-  currentUser = acc;
-  document.getElementById('loginScreen').classList.add('hidden');
-  document.getElementById('app').classList.remove('hidden');
-  document.getElementById('userName').textContent = acc.nama;
-  document.getElementById('userRole').textContent = acc.role === 'admin' ? 'Administrator' : 'Guru';
-  document.getElementById('userInitial').textContent = acc.nama.charAt(0).toUpperCase();
-  document.querySelectorAll('.admin-only').forEach(el => el.style.display = acc.role === 'admin' ? '' : 'none');
-  if(!gasUrl && acc.role==='admin'){ showToast('URL Google Sheets belum diatur. Buka menu Pengaturan.'); }
-  refreshAllViews();
+  saveSession(acc);
+  enterApp(acc);
 }
 function doLogout(){
+  clearSession();
   currentUser = null;
   document.getElementById('app').classList.add('hidden');
   document.getElementById('loginScreen').classList.remove('hidden');
@@ -1050,7 +1080,7 @@ async function saveMurid(closeAfter){
   if(pendingFotoAction === 'set' && pendingFotoDataUrl){
     showToast('Mengunggah foto ke Google Drive...');
     const up = await gasUploadFoto(pendingFotoDataUrl, 'siswa_' + nis + '_' + Date.now() + '.jpg');
-    if(up && up.success && up.url){ fotoUrl = up.url; }
+    if(up && up.success && up.url){ fotoUrl = up.url; renderFotoPreview(fotoUrl); }
     else { showToast('Gagal upload foto, data lain tetap disimpan tanpa foto baru.'); }
   } else if(pendingFotoAction === 'delete'){
     fotoUrl = '';
