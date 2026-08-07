@@ -202,6 +202,23 @@
     #printArea{display:block; position:absolute; top:0; left:0; width:100%; padding:20px;}
   }
 
+  /* pagination */
+  .pagination{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:14px 2px 2px;flex-wrap:wrap;}
+  .pagination .pg-info{font-size:12px;color:var(--ink-400);}
+  .pagination .pg-btn{
+    padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:#fff;
+    font-size:12.5px;font-weight:600;color:var(--ink-600);cursor:pointer;
+  }
+  .pagination .pg-btn:disabled{opacity:.4;cursor:not-allowed;}
+  .pagination .pg-btn:not(:disabled):hover{border-color:var(--blue-500);color:var(--blue-600);}
+
+  /* detail murid page */
+  .field-value{font-size:13.5px;color:var(--ink-900);padding:2px 0 2px;min-height:19px;}
+  .detail-hero{display:flex;gap:18px;align-items:center;margin-bottom:18px;flex-wrap:wrap;}
+  .detail-hero img, .detail-hero .ph{width:88px;height:88px;border-radius:14px;object-fit:cover;background:var(--blue-50);flex-shrink:0;}
+  .detail-hero .ph{display:flex;align-items:center;justify-content:center;color:var(--blue-600);font-weight:800;font-size:28px;}
+  .detail-section{margin-bottom:20px;}
+
   ::-webkit-scrollbar{width:8px;height:8px;}
   ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:10px;}
 </style>
@@ -311,8 +328,8 @@
               <button class="btn btn-outline" onclick="exportMuridCSV()">&#11015; Export CSV (utk Google Sheets)</button>
             </div>
             <div class="right">
-              <input class="search-input" id="muridSearch" placeholder="Cari murid..." oninput="renderMurid()">
-              <select class="search-input" id="muridFilterKelas" onchange="renderMurid()"><option value="">Semua Kelas</option></select>
+              <input class="search-input" id="muridSearch" placeholder="Cari murid..." oninput="muridPage=1;renderMurid()">
+              <select class="search-input" id="muridFilterKelas" onchange="muridPage=1;renderMurid()"><option value="">Semua Kelas</option></select>
             </div>
           </div>
           <div style="overflow-x:auto;">
@@ -326,7 +343,23 @@
           </table>
           </div>
           <div id="muridEmpty" class="empty-state hidden">Belum ada data murid. Klik "Tambah Murid" untuk mulai.</div>
+          <div id="muridPagination" class="pagination"></div>
         </div>
+      </div>
+
+      <!-- DETAIL MURID -->
+      <div class="page" id="page-muridDetail">
+        <div class="page-head">
+          <div>
+            <h2>Detail Murid</h2>
+            <div class="crumbs">Dashboard &gt; Data Murid &gt; Detail</div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-outline" onclick="backToMuridList()">&#8592; Kembali</button>
+            <button class="btn btn-primary" onclick="editFromDetail()">&#9998; Edit</button>
+          </div>
+        </div>
+        <div class="card" id="muridDetailBody"></div>
       </div>
 
       <!-- DATA GURU -->
@@ -340,13 +373,14 @@
               <button class="btn btn-primary admin-only" onclick="openGuruForm()">+ Tambah Guru</button>
               <button class="btn btn-outline admin-only" onclick="exportGuruCSV()">&#11015; Export CSV (utk Google Sheets)</button>
             </div>
-            <div class="right"><input class="search-input" id="guruSearch" placeholder="Cari guru..." oninput="renderGuru()"></div>
+            <div class="right"><input class="search-input" id="guruSearch" placeholder="Cari guru..." oninput="guruPage=1;renderGuru()"></div>
           </div>
           <table>
             <thead><tr><th>Nomor Induk Guru</th><th>Nama Guru</th><th>Kelurahan Domisili</th><th>Jenjang</th><th>Username</th><th>Aksi</th></tr></thead>
             <tbody id="guruTableBody"></tbody>
           </table>
           <div id="guruEmpty" class="empty-state hidden">Belum ada data guru.</div>
+          <div id="guruPagination" class="pagination"></div>
         </div>
       </div>
 
@@ -523,6 +557,22 @@
   </div>
 </div>
 
+<!-- ============ MODAL: RESET PASSWORD GURU ============ -->
+<div class="modal-backdrop hidden" id="resetPassModal">
+  <div class="modal modal-sm">
+    <div class="modal-head"><h3>Reset Password Guru</h3><button class="close-x" onclick="closeModal('resetPassModal')">&times;</button></div>
+    <div class="modal-body">
+      <div class="field-value" id="resetPassGuruName" style="font-weight:700;margin-bottom:10px;"></div>
+      <div class="field"><label>Password Baru</label><input id="rp_password" type="text" placeholder="Ketik password baru"></div>
+      <div class="field"><label>Ulangi Password Baru</label><input id="rp_password2" type="text" placeholder="Ketik ulang password baru"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeModal('resetPassModal')">Batal</button>
+      <button class="btn btn-primary" onclick="saveResetPassword()">Reset Password</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ MODAL: KELAS FORM ============ -->
 <div class="modal-backdrop hidden" id="kelasModal">
   <div class="modal">
@@ -600,6 +650,9 @@
 let accounts = [], muridList = [], guruList = [], kelasList = [], kehadiranList = [], detailList = [];
 let currentUser = null;
 let editingMuridId = null, editingGuruId = null, editingKelasId = null, activeDetailSessionId = null;
+let editingResetGuruId = null, currentDetailMuridId = null;
+const PAGE_SIZE = 10;
+let muridPage = 1, guruPage = 1;
 const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbxsXWxLP5q6Nsq68Zc5JCK0HzOPNWKOHIcFuAhhCvcyGb29kvRqIYklhvPs9yypoTPShQ/exec';
 let gasUrl = DEFAULT_GAS_URL;
 let pendingFotoAction = null; // null = tidak ada perubahan, 'set' = ada foto baru, 'delete' = hapus foto
@@ -1031,7 +1084,9 @@ function renderMurid(){
     (!fk || m.kelasId===fk)
   );
   document.getElementById('muridEmpty').classList.toggle('hidden', rows.length>0);
-  document.getElementById('muridTableBody').innerHTML = rows.map(m => `
+  muridPage = paginate('muridPagination', rows.length, muridPage, 'setMuridPage');
+  const pageRows = rows.slice((muridPage-1)*PAGE_SIZE, muridPage*PAGE_SIZE);
+  document.getElementById('muridTableBody').innerHTML = pageRows.map(m => `
     <tr>
       <td>${m.fotoUrl ? `<img class="thumb" src="${m.fotoUrl}" alt="">` : `<div class="thumb" style="display:flex;align-items:center;justify-content:center;color:#7ba0e0;font-weight:700;">${escapeHtml((m.nama||'?').charAt(0).toUpperCase())}</div>`}</td>
       <td>${m.nis}</td>
@@ -1045,6 +1100,7 @@ function renderMurid(){
       <td>${escapeHtml(m.kelurahan)||'-'}</td>
       <td>${escapeHtml(m.namaOrtu)||'-'}</td>
       <td><div class="icon-row">
+        <button class="btn-ghost" title="Detail" onclick="openMuridDetail('${m.id}')">&#128065;</button>
         <button class="btn-ghost" title="Edit" onclick="openMuridForm('${m.id}')">&#9998;</button>
         <button class="btn-ghost" title="Print" onclick="printMurid('${m.id}')">&#128424;</button>
         <button class="btn-ghost" title="Hapus" onclick="confirmDelete('murid','${m.id}')">&#128465;</button>
@@ -1053,7 +1109,70 @@ function renderMurid(){
   `).join('');
 }
 
-/* ---- print murid ---- */
+/* ---- detail murid (halaman terpisah) ---- */
+function openMuridDetail(id){
+  currentDetailMuridId = id;
+  renderMuridDetailPage();
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-muridDetail').classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const navMurid = document.querySelector('.nav-item[data-page="murid"]');
+  if(navMurid) navMurid.classList.add('active');
+  document.getElementById('topTitle').textContent = 'Detail Murid';
+  document.getElementById('topCrumb').textContent = 'Dashboard > Data Murid > Detail';
+}
+function backToMuridList(){ goPage('murid'); }
+function editFromDetail(){
+  if(!currentDetailMuridId) return;
+  openMuridForm(currentDetailMuridId);
+}
+function renderMuridDetailPage(){
+  const m = muridList.find(x=>x.id===currentDetailMuridId);
+  const box = document.getElementById('muridDetailBody');
+  if(!m){ box.innerHTML = '<div class="empty-state">Data murid tidak ditemukan.</div>'; return; }
+  const dv = (label, val) => `<div class="field"><label>${label}</label><div class="field-value">${escapeHtml(val)||'-'}</div></div>`;
+  box.innerHTML = `
+    <div class="detail-hero">
+      ${m.fotoUrl ? `<img src="${m.fotoUrl}" alt="">` : `<div class="ph">${escapeHtml((m.nama||'?').charAt(0).toUpperCase())}</div>`}
+      <div>
+        <div style="font-size:18px;font-weight:800;color:var(--ink-900);">${escapeHtml(m.nama)}</div>
+        <div style="color:var(--ink-400);font-size:13px;">Nomor Siswa: ${escapeHtml(m.nis)} &middot; ${escapeHtml(kelasLabel(m.kelasId))||'Belum ada kelas'}</div>
+      </div>
+    </div>
+    <div class="detail-section">
+      <div class="eyebrow">Identitas</div>
+      <div class="form-grid">
+        ${dv('Nomor Siswa', m.nis)}
+        ${dv('Nama Siswa', m.nama)}
+        ${dv('Tanggal Lahir', m.tglLahir)}
+      </div>
+    </div>
+    <div class="detail-section">
+      <div class="eyebrow">Kelas & Jenjang</div>
+      <div class="form-grid">
+        ${dv('Kelas', kelasLabel(m.kelasId))}
+        ${dv('Tanggal Gabung', m.tglGabung)}
+        ${dv('Tanggal Jenjang di Kelas Saat Ini', m.tglJenjang)}
+      </div>
+    </div>
+    <div class="detail-section">
+      <div class="eyebrow">Alamat</div>
+      <div class="form-grid">
+        ${dv('Alamat', m.alamat)}
+        ${dv('RW', m.rw)}
+        ${dv('Kelurahan', m.kelurahan)}
+      </div>
+    </div>
+    <div class="detail-section">
+      <div class="eyebrow">Orang Tua</div>
+      <div class="form-grid">
+        ${dv('Nama Orang Tua', m.namaOrtu)}
+      </div>
+    </div>
+  `;
+}
+
+
 function printMurid(id){
   const m = muridList.find(x=>x.id===id);
   if(!m) return;
@@ -1212,18 +1331,44 @@ async function saveGuru(){
   if(res && res.success){ showToast('Data guru tersimpan ke Google Sheets.'); }
   renderGuru(); renderDashboard(); closeModal('guruModal');
 }
+
+/* ---- reset password guru (terpisah dari form edit) ---- */
+function openResetPassForm(id){
+  editingResetGuruId = id;
+  const g = guruList.find(x=>x.id===id);
+  document.getElementById('resetPassGuruName').textContent = g ? (g.nama + ' — ' + g.nomor) : '';
+  document.getElementById('rp_password').value = '';
+  document.getElementById('rp_password2').value = '';
+  openModal('resetPassModal');
+}
+async function saveResetPassword(){
+  const p1 = document.getElementById('rp_password').value;
+  const p2 = document.getElementById('rp_password2').value;
+  if(!p1){ showToast('Password baru wajib diisi.'); return; }
+  if(p1 !== p2){ showToast('Konfirmasi password tidak cocok.'); return; }
+  const acc = accountFor(editingResetGuruId);
+  if(!acc || !acc.id){ showToast('Akun guru tidak ditemukan.'); return; }
+  const accRecord = { ...acc, password: p1 };
+  accounts = accounts.map(a => a.id === acc.id ? accRecord : a);
+  const res = await gasUpsert('Akun', akunToSheet(accRecord));
+  if(res && res.success){ showToast('Password guru berhasil direset.'); }
+  closeModal('resetPassModal');
+}
 function renderGuru(){
   const q = (document.getElementById('guruSearch').value||'').toLowerCase();
   const rows = guruList.filter(g => !q || g.nama.toLowerCase().includes(q));
   document.getElementById('guruEmpty').classList.toggle('hidden', rows.length>0);
-  document.getElementById('guruTableBody').innerHTML = rows.map(g => {
+  guruPage = paginate('guruPagination', rows.length, guruPage, 'setGuruPage');
+  const pageRows = rows.slice((guruPage-1)*PAGE_SIZE, guruPage*PAGE_SIZE);
+  document.getElementById('guruTableBody').innerHTML = pageRows.map(g => {
     const acc = accountFor(g.id);
     return `<tr>
       <td>${g.nomor}</td><td><b>${escapeHtml(g.nama)}</b></td><td>${escapeHtml(g.kelurahan)||'-'}</td>
       <td>${escapeHtml(g.jenjang)||'-'}</td><td>${escapeHtml(acc.username)||'-'}</td>
       <td class="admin-only-cell"><div class="icon-row">
-        <button class="btn-ghost" onclick="openGuruForm('${g.id}')">&#9998;</button>
-        <button class="btn-ghost" onclick="confirmDelete('guru','${g.id}')">&#128465;</button>
+        <button class="btn-ghost" title="Edit" onclick="openGuruForm('${g.id}')">&#9998;</button>
+        <button class="btn-ghost" title="Reset Password" onclick="openResetPassForm('${g.id}')">&#128273;</button>
+        <button class="btn-ghost" title="Hapus" onclick="confirmDelete('guru','${g.id}')">&#128465;</button>
       </div></td>
     </tr>`;
   }).join('');
@@ -1233,7 +1378,32 @@ function renderGuru(){
   document.getElementById('k_guru').innerHTML = '<option value="">Pilih guru</option>' + guruList.map(g=>`<option value="${g.id}">${escapeHtml(g.nama)}</option>`).join('');
 }
 
-/* ================= DATA KELAS ================= */
+/* ================= PAGINATION HELPER ================= */
+/** Render kontrol Prev/Next + info halaman ke sebuah container, dan mengembalikan halaman yang sudah di-clamp (biar aman kalau data berkurang karena filter/hapus). */
+function paginate(containerId, totalItems, currentPage, setPageFnName){
+  const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+  const page = Math.min(Math.max(1, currentPage), totalPages);
+  const el = document.getElementById(containerId);
+  if(el){
+    if(totalItems <= PAGE_SIZE){
+      el.innerHTML = '';
+    } else {
+      const start = totalItems === 0 ? 0 : (page-1)*PAGE_SIZE + 1;
+      const end = Math.min(page*PAGE_SIZE, totalItems);
+      el.innerHTML = `
+        <span class="pg-info">Menampilkan ${start}-${end} dari ${totalItems}</span>
+        <button class="pg-btn" ${page<=1?'disabled':''} onclick="${setPageFnName}(${page-1})">&#8592; Sebelumnya</button>
+        <span class="pg-info">Halaman ${page} / ${totalPages}</span>
+        <button class="pg-btn" ${page>=totalPages?'disabled':''} onclick="${setPageFnName}(${page+1})">Berikutnya &#8594;</button>
+      `;
+    }
+  }
+  return page;
+}
+function setMuridPage(p){ muridPage = p; renderMurid(); }
+function setGuruPage(p){ guruPage = p; renderGuru(); }
+
+
 function openKelasForm(id){
   editingKelasId = id || null;
   document.getElementById('kelasModalTitle').textContent = id ? 'Edit Kelas' : 'Tambah Kelas';
