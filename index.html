@@ -190,6 +190,25 @@
   }
   .toast.show{opacity:1; transform:translateY(0);}
 
+  /* spinner kecil dipakai di tombol (anti klik-ganda) & badge sync */
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  .btn-spinner{
+    display:inline-block;width:13px;height:13px;border-radius:50%;
+    border:2px solid rgba(255,255,255,.45);border-top-color:#fff;
+    animation:spin .7s linear infinite;vertical-align:-2px;margin-right:6px;
+  }
+  .btn-outline .btn-spinner, .btn[disabled] .btn-spinner{border-color:rgba(37,99,235,.35);border-top-color:var(--blue-600);}
+  button[disabled]{opacity:.7;cursor:not-allowed;}
+
+  .sync-badge{
+    display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-600);
+    background:var(--blue-50);border:1px solid var(--line);padding:6px 12px;border-radius:999px;
+  }
+  .sync-badge .btn-spinner{border-color:rgba(37,99,235,.3);border-top-color:var(--blue-600);margin-right:2px;}
+  .sync-badge.hidden{display:none;}
+
+  #loginScreen .btn-spinner{border-color:rgba(255,255,255,.4);border-top-color:#fff;}
+
   .kv-list{display:flex;flex-direction:column;gap:8px;}
   .kv-list .row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px dashed var(--line);font-size:13px;}
   .kv-list .row b{color:var(--ink-600);font-weight:600;}
@@ -246,7 +265,7 @@
       <label>Password</label>
       <input id="loginPass" type="password" placeholder="Ketik password">
     </div>
-    <button class="btn btn-primary btn-block" onclick="doLogin()">Masuk</button>
+    <button class="btn btn-primary btn-block" id="loginBtn" onclick="withBusy(this, doLogin)" disabled>Memuat sistem...</button>
     <div class="login-hint">
       Akun demo — Administrator: <b>admin</b> / <b>admin123</b><br>
       Data yang Anda simpan di sini tersimpan bersama (shared) untuk semua pengguna aplikasi ini.
@@ -283,11 +302,14 @@
         <h2 id="topTitle">Dashboard</h2>
         <div class="crumbs" id="topCrumb">Dashboard</div>
       </div>
-      <div class="user-chip">
-        <div class="avatar" id="userInitial">A</div>
-        <div class="who">
-          <div id="userName">Administrator</div>
-          <div id="userRole">Administrator</div>
+      <div style="display:flex;align-items:center;gap:14px;">
+        <div id="syncBadge" class="sync-badge hidden"><span class="btn-spinner"></span><span id="syncBadgeText">Menyinkronkan data...</span></div>
+        <div class="user-chip">
+          <div class="avatar" id="userInitial">A</div>
+          <div class="who">
+            <div id="userName">Administrator</div>
+            <div id="userRole">Administrator</div>
+          </div>
         </div>
       </div>
     </div>
@@ -507,8 +529,8 @@
     <div class="modal-foot">
       <button class="btn btn-outline" onclick="resetMuridForm()">&#8635; Reset</button>
       <button class="btn btn-outline" onclick="closeModal('muridModal')">Batal</button>
-      <button class="btn btn-primary" onclick="saveMurid(false)">&#128190; Simpan</button>
-      <button class="btn btn-green" onclick="saveMurid(true)">&#128190; Simpan & Tutup</button>
+      <button class="btn btn-primary" data-busy-text="Menyimpan..." onclick="withBusy(this, () => saveMurid(false))">&#128190; Simpan</button>
+      <button class="btn btn-green" data-busy-text="Menyimpan..." onclick="withBusy(this, () => saveMurid(true))">&#128190; Simpan & Tutup</button>
     </div>
   </div>
 </div>
@@ -530,7 +552,7 @@
     </div>
     <div class="modal-foot">
       <button class="btn btn-outline" onclick="closeModal('guruModal')">Batal</button>
-      <button class="btn btn-primary" onclick="saveGuru()">Simpan</button>
+      <button class="btn btn-primary" data-busy-text="Menyimpan..." onclick="withBusy(this, saveGuru)">Simpan</button>
     </div>
   </div>
 </div>
@@ -546,7 +568,7 @@
     </div>
     <div class="modal-foot">
       <button class="btn btn-outline" onclick="closeModal('resetPassModal')">Batal</button>
-      <button class="btn btn-primary" onclick="saveResetPassword()">Reset Password</button>
+      <button class="btn btn-primary" data-busy-text="Menyimpan..." onclick="withBusy(this, saveResetPassword)">Reset Password</button>
     </div>
   </div>
 </div>
@@ -568,7 +590,7 @@
     </div>
     <div class="modal-foot">
       <button class="btn btn-outline" onclick="closeModal('kelasModal')">Batal</button>
-      <button class="btn btn-primary" onclick="saveKelas()">Simpan</button>
+      <button class="btn btn-primary" data-busy-text="Menyimpan..." onclick="withBusy(this, saveKelas)">Simpan</button>
     </div>
   </div>
 </div>
@@ -586,7 +608,7 @@
     </div>
     <div class="modal-foot">
       <button class="btn btn-outline" onclick="closeModal('kehadiranModal')">Batal</button>
-      <button class="btn btn-primary" onclick="saveKehadiran()">Buat Sesi</button>
+      <button class="btn btn-primary" data-busy-text="Menyimpan..." onclick="withBusy(this, saveKehadiran)">Buat Sesi</button>
     </div>
   </div>
 </div>
@@ -603,7 +625,7 @@
     </div>
     <div class="modal-foot">
       <button class="btn btn-outline" onclick="closeModal('detailModal')">Tutup</button>
-      <button class="btn btn-primary" onclick="saveDetail()">Simpan Kehadiran</button>
+      <button class="btn btn-primary" data-busy-text="Menyimpan..." onclick="withBusy(this, saveDetail)">Simpan Kehadiran</button>
     </div>
   </div>
 </div>
@@ -655,18 +677,60 @@ function showToast(msg){
   setTimeout(()=>t.classList.remove('show'), 2200);
 }
 
+/* ================= INDIKATOR SYNC GLOBAL ================= */
+// Dipakai supaya user tahu ada proses baca/tulis ke Google Sheets yang belum selesai,
+// bukan cuma diam-diam loading (terutama kerasa penting karena Apps Script suka lambat).
+let syncCount = 0;
+function beginSync(label){
+  syncCount++;
+  const badge = document.getElementById('syncBadge');
+  if(badge){
+    document.getElementById('syncBadgeText').textContent = label || 'Menyinkronkan data...';
+    badge.classList.remove('hidden');
+  }
+}
+function endSync(){
+  syncCount = Math.max(0, syncCount-1);
+  if(syncCount === 0){
+    const badge = document.getElementById('syncBadge');
+    if(badge) badge.classList.add('hidden');
+  }
+}
+
+/* ================= TOMBOL: cegah klik ganda + kasih spinner ================= */
+// Bungkus tombol async (Simpan, Masuk, Hapus, dst) supaya: (1) tidak bisa diklik dua kali
+// selagi proses masih jalan, (2) user lihat feedback visual (spinner) bukan tombol diam
+// yang bikin ragu apakah klik-nya kena atau belum.
+async function withBusy(btn, fn){
+  if(!btn || btn.dataset.busy) return; // sudah diproses, abaikan klik susulan
+  const original = btn.innerHTML;
+  btn.dataset.busy = '1';
+  btn.disabled = true;
+  btn.innerHTML = '<span class="btn-spinner"></span>' + (btn.dataset.busyText || 'Memproses...');
+  try{
+    await fn();
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = original;
+    delete btn.dataset.busy;
+  }
+}
+
 /* ================= GOOGLE APPS SCRIPT (GSHEET) BRIDGE ================= */
 async function gasList(sheetName){
   if(!gasUrl) return [];
+  beginSync('Memuat ' + sheetName + '...');
   try{
     const res = await fetch(gasUrl + '?sheet=' + encodeURIComponent(sheetName) + '&action=list');
     const json = await res.json();
     if(json.error){ showToast('Google Sheets error: ' + json.error); return []; }
     return json.rows || [];
   }catch(e){ console.error('gasList failed', sheetName, e); showToast('Gagal mengambil data dari Google Sheets.'); return []; }
+  finally{ endSync(); }
 }
 async function gasUpsert(sheetName, dataObj){
   if(!gasUrl){ showToast('URL Google Sheets belum diatur di kode (DEFAULT_GAS_URL).'); return {success:false}; }
+  beginSync('Menyimpan ke ' + sheetName + '...');
   try{
     const res = await fetch(gasUrl + '?sheet=' + encodeURIComponent(sheetName) + '&action=upsert', {
       method:'POST', body: JSON.stringify({data: dataObj})
@@ -675,19 +739,23 @@ async function gasUpsert(sheetName, dataObj){
     if(!json.success){ showToast('Gagal menyimpan ke Google Sheets' + (json.message?(': '+json.message):'') + '.'); }
     return json;
   }catch(e){ console.error('gasUpsert failed', sheetName, e); showToast('Gagal menyimpan ke Google Sheets.'); return {success:false}; }
+  finally{ endSync(); }
 }
 async function gasDelete(sheetName, idVal){
   if(!gasUrl){ showToast('URL Google Sheets belum diatur.'); return {success:false}; }
+  beginSync('Menghapus dari ' + sheetName + '...');
   try{
     const res = await fetch(gasUrl + '?sheet=' + encodeURIComponent(sheetName) + '&action=delete', {
       method:'POST', body: JSON.stringify({id: idVal})
     });
     return await res.json();
   }catch(e){ console.error('gasDelete failed', sheetName, e); showToast('Gagal menghapus di Google Sheets.'); return {success:false}; }
+  finally{ endSync(); }
 }
 async function gasUploadFoto(dataUrl, filename){
   if(!gasUrl){ showToast('URL Google Sheets belum diatur di kode (DEFAULT_GAS_URL).'); return {success:false}; }
   if(!dataUrl){ showToast('Tidak ada data foto untuk diupload.'); return {success:false}; }
+  beginSync('Mengunggah foto...');
   let res;
   try{
     res = await fetch(gasUrl + '?action=uploadFoto', {
@@ -698,18 +766,29 @@ async function gasUploadFoto(dataUrl, filename){
   }catch(e){
     console.error('gasUploadFoto network error', e);
     showToast('Gagal upload foto: tidak bisa menghubungi Google Apps Script. Cek DEFAULT_GAS_URL di kode / koneksi internet.');
+    endSync();
     return {success:false};
   }
+  // Ambil sebagai TEXT dulu (bukan langsung res.json()) supaya kalau responsnya bukan JSON
+  // (mis. Google malah mengembalikan halaman HTML izin akses / error otorisasi), kita masih
+  // bisa lihat cuplikannya buat diagnosa — bukan cuma "gagal parse JSON" yang tidak jelas.
+  const rawText = await res.text();
   let json;
   try{
-    json = await res.json();
+    json = JSON.parse(rawText);
   }catch(e){
-    // Respons bukan JSON valid — biasanya berarti action "uploadFoto" belum ada/error di Code.gs,
-    // atau deployment Apps Script belum di-update ke versi terbaru.
-    console.error('gasUploadFoto: respons bukan JSON', e);
-    showToast('Gagal upload foto: server tidak mengembalikan JSON yang valid. Pastikan Code.gs sudah support action "uploadFoto" dan sudah di-deploy ulang (Deploy > Manage deployments > Edit > Deploy).');
+    console.error('gasUploadFoto: respons bukan JSON. Status HTTP:', res.status, '\nCuplikan respons:', rawText.slice(0, 500));
+    const looksLikeAuthPage = /accounts\.google\.com|Sorry, unable to open the file|You need permission|Authorization required|Google Apps Script/i.test(rawText);
+    showToast(
+      'Gagal upload foto: server tidak mengembalikan JSON (HTTP ' + res.status + ').' +
+      (looksLikeAuthPage
+        ? ' Kemungkinan besar Apps Script minta izin akses Google Drive yang belum di-approve — buka Apps Script editor, jalankan (Run) fungsi manapun yang pakai DriveApp secara manual sekali untuk approve izinnya, lalu coba lagi.'
+        : ' Cek Console browser (F12) untuk detail responsnya.')
+    );
+    endSync();
     return {success:false};
   }
+  endSync();
   if(!json.success){
     // Code.gs sekarang bisa kirim pesan lewat "message" (kegagalan yang sudah diantisipasi,
     // mis. data foto kosong) ATAU "error" (exception tak terduga, mis. DriveApp gagal).
@@ -856,6 +935,10 @@ async function boot(){
     accounts = [DEFAULT_ADMIN];
     if(gasUrl) await gasUpsert('Akun', akunToSheet(DEFAULT_ADMIN));
   }
+  // Data akun sudah siap — tombol Masuk boleh dipakai (tadinya disabled dengan teks
+  // "Memuat sistem..." supaya user tidak coba login sebelum data akun kebaca).
+  const loginBtn = document.getElementById('loginBtn');
+  if(loginBtn){ loginBtn.disabled = false; loginBtn.textContent = 'Masuk'; }
   // Restore sesi SEDINI mungkin (cuma butuh data Akun yang sudah siap di atas) — tidak perlu
   // nunggu Guru/Kelas/Siswa/Kehadiran/Detail kelar dulu, supaya refresh terasa instan.
   const session = loadSession();
@@ -865,7 +948,8 @@ async function boot(){
     if(restoredAcc){ enterApp(restoredAcc); }
     else { clearSession(); }
   }
-  // Lanjut load sisa data di background (paralel), lalu refresh tampilan begitu selesai.
+  // Lanjut load sisa data di background (paralel; badge "Menyinkronkan..." di topbar otomatis
+  // muncul karena gasList() sendiri yang mengontrolnya), lalu refresh tampilan begitu selesai.
   await loadRestFromSheets();
   if(restoredAcc){ refreshAllViews(); }
 }
@@ -1087,12 +1171,17 @@ async function saveMurid(closeAfter){
   const nis = f_nis.value;
   const existing = editingMuridId ? muridList.find(m=>m.id===editingMuridId) : null;
   let fotoUrl = existing ? (existing.fotoUrl || '') : '';
-  const saveBtns = document.querySelectorAll('#muridModal .modal-foot .btn');
+  // Tombol yang sedang diklik (Simpan/Simpan&Tutup) sudah di-disable + kasih spinner oleh
+  // withBusy() selama seluruh proses saveMurid ini jalan — jangan disentuh di sini, biar tidak
+  // "hidup lagi" duluan (disabled=false) padahal proses belum kelar. Yang perlu di-lock
+  // sementara cuma tombol LAIN (Reset/Batal/varian Simpan yang tidak diklik), khusus selama
+  // upload foto berlangsung, supaya modal tidak bisa ditutup di tengah upload.
+  const otherBtns = document.querySelectorAll('#muridModal .modal-foot .btn:not([data-busy])');
   if(pendingFotoAction === 'set' && pendingFotoDataUrl){
-    saveBtns.forEach(b=>b.disabled = true);
+    otherBtns.forEach(b=>b.disabled = true);
     showToast('Mengunggah foto ke Google Drive...');
     const up = await gasUploadFoto(pendingFotoDataUrl, 'siswa_' + nis + '_' + Date.now() + '.jpg');
-    saveBtns.forEach(b=>b.disabled = false);
+    otherBtns.forEach(b=>b.disabled = false);
     if(up && up.success && up.url){
       fotoUrl = up.url;
       renderFotoPreview(fotoUrl);
@@ -1587,7 +1676,8 @@ async function saveDetail(){
 
 /* ================= DELETE ================= */
 function confirmDelete(type, id){
-  document.getElementById('confirmDeleteBtn').onclick = async () => {
+  const btn = document.getElementById('confirmDeleteBtn');
+  btn.onclick = () => withBusy(btn, async () => {
     if(type==='murid'){
       muridList = muridList.filter(m=>m.id!==id);
       await gasDelete('Siswa', id);
@@ -1644,7 +1734,7 @@ function confirmDelete(type, id){
     renderDashboard();
     showToast('Data dihapus.');
     closeModal('confirmModal');
-  };
+  });
   openModal('confirmModal');
 }
 </script>
