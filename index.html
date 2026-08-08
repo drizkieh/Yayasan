@@ -271,7 +271,6 @@
       <div class="nav-item admin-only" data-page="guru" onclick="goPage('guru')"><span class="ic">&#128100;</span> Data Guru</div>
       <div class="nav-item" data-page="kelas" onclick="goPage('kelas')"><span class="ic">&#128218;</span> Data Kelas</div>
       <div class="nav-item" data-page="kehadiran" onclick="goPage('kehadiran')"><span class="ic">&#128197;</span> Kehadiran</div>
-      <div class="nav-item admin-only" data-page="pengaturan" onclick="goPage('pengaturan')"><span class="ic">&#9881;</span> Pengaturan</div>
     </div>
     <div class="sidebar-foot">
       <div class="nav-item" onclick="doLogout()"><span class="ic">&#8630;</span> Keluar</div>
@@ -422,27 +421,6 @@
             <tbody id="kehadiranTableBody"></tbody>
           </table>
           <div id="kehadiranEmpty" class="empty-state hidden">Belum ada sesi kehadiran.</div>
-        </div>
-      </div>
-
-      <!-- PENGATURAN -->
-      <div class="page" id="page-pengaturan">
-        <div class="page-head">
-          <div><h2>Pengaturan</h2><div class="crumbs">Dashboard &gt; Pengaturan</div></div>
-        </div>
-        <div class="card" style="max-width:560px;">
-          <div class="eyebrow">Koneksi Google Sheets</div>
-          <div class="field">
-            <label>URL Web App (Google Apps Script)</label>
-            <input id="gasUrlInput" placeholder="https://script.google.com/macros/s/xxx/exec">
-          </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="btn btn-primary" onclick="savePengaturanUrl()">&#128190; Simpan & Muat Ulang</button>
-            <button class="btn btn-outline" onclick="testGasConnection()">Tes Koneksi</button>
-          </div>
-          <div style="font-size:11.5px;color:var(--ink-400);margin-top:12px;line-height:1.6;">
-            Deploy file Code.gs sebagai Web App (Execute as: Me, Who has access: Anyone), lalu tempel URL <code>.../exec</code>-nya di sini. Setelah disimpan, semua data Murid, Guru, Kelas, dan Kehadiran akan dibaca &amp; ditulis langsung ke Google Sheets Anda.
-          </div>
         </div>
       </div>
 
@@ -659,15 +637,8 @@ let pendingFotoAction = null; // null = tidak ada perubahan, 'set' = ada foto ba
 let pendingFotoDataUrl = null; // data URL base64 hasil resize, siap diupload saat simpan
 let cameraStream = null;
 
-/* ================= LOCAL STORAGE HELPERS (URL Apps Script saja) ================= */
+/* ================= AKUN DEFAULT (fallback sebelum ada data di sheet Akun) ================= */
 const DEFAULT_ADMIN = {id:'acc-admin', username:'admin', password:'admin123', role:'admin', nama:'Administrator'};
-async function loadGasUrl(){
-  // Hardcoded jadi default supaya jalan otomatis walau di-deploy ke domain sendiri
-  // (window.storage cuma ada di Claude artifact preview). Kalau ada nilai tersimpan
-  // di window.storage (mis. diganti manual lewat menu Pengaturan di preview), pakai itu.
-  try{ const r = await window.storage.get('gasUrl', true); gasUrl = (r && r.value) ? r.value : DEFAULT_GAS_URL; }
-  catch(e){ gasUrl = DEFAULT_GAS_URL; }
-}
 
 /* ================= SESSION LOGIN (localStorage, biar tidak logout tiap refresh) ================= */
 const SESSION_KEY = 'sim_yayasan_session';
@@ -676,10 +647,6 @@ function clearSession(){ try{ localStorage.removeItem(SESSION_KEY); }catch(e){} 
 function loadSession(){
   try{ const raw = localStorage.getItem(SESSION_KEY); return raw ? JSON.parse(raw) : null; }
   catch(e){ return null; }
-}
-async function saveGasUrl(url){
-  gasUrl = url.trim();
-  try{ await window.storage.set('gasUrl', gasUrl, true); }catch(e){ console.error(e); }
 }
 
 function showToast(msg){
@@ -699,7 +666,7 @@ async function gasList(sheetName){
   }catch(e){ console.error('gasList failed', sheetName, e); showToast('Gagal mengambil data dari Google Sheets.'); return []; }
 }
 async function gasUpsert(sheetName, dataObj){
-  if(!gasUrl){ showToast('URL Google Sheets belum diatur. Buka menu Pengaturan.'); return {success:false}; }
+  if(!gasUrl){ showToast('URL Google Sheets belum diatur di kode (DEFAULT_GAS_URL).'); return {success:false}; }
   try{
     const res = await fetch(gasUrl + '?sheet=' + encodeURIComponent(sheetName) + '&action=upsert', {
       method:'POST', body: JSON.stringify({data: dataObj})
@@ -719,15 +686,46 @@ async function gasDelete(sheetName, idVal){
   }catch(e){ console.error('gasDelete failed', sheetName, e); showToast('Gagal menghapus di Google Sheets.'); return {success:false}; }
 }
 async function gasUploadFoto(dataUrl, filename){
-  if(!gasUrl){ showToast('URL Google Sheets belum diatur. Buka menu Pengaturan.'); return {success:false}; }
+  if(!gasUrl){ showToast('URL Google Sheets belum diatur di kode (DEFAULT_GAS_URL).'); return {success:false}; }
+  if(!dataUrl){ showToast('Tidak ada data foto untuk diupload.'); return {success:false}; }
+  let res;
   try{
-    const res = await fetch(gasUrl + '?action=uploadFoto', {
-      method:'POST', body: JSON.stringify({dataUrl, filename})
+    res = await fetch(gasUrl + '?action=uploadFoto', {
+      method:'POST',
+      headers: {'Content-Type':'text/plain;charset=utf-8'}, // hindari preflight CORS ke Apps Script
+      body: JSON.stringify({dataUrl, filename})
     });
-    const json = await res.json();
-    if(!json.success){ showToast('Gagal upload foto' + (json.message?(': '+json.message):'') + '.'); }
-    return json;
-  }catch(e){ console.error('gasUploadFoto failed', e); showToast('Gagal upload foto ke Google Drive.'); return {success:false}; }
+  }catch(e){
+    console.error('gasUploadFoto network error', e);
+    showToast('Gagal upload foto: tidak bisa menghubungi Google Apps Script. Cek DEFAULT_GAS_URL di kode / koneksi internet.');
+    return {success:false};
+  }
+  let json;
+  try{
+    json = await res.json();
+  }catch(e){
+    // Respons bukan JSON valid — biasanya berarti action "uploadFoto" belum ada/error di Code.gs,
+    // atau deployment Apps Script belum di-update ke versi terbaru.
+    console.error('gasUploadFoto: respons bukan JSON', e);
+    showToast('Gagal upload foto: server tidak mengembalikan JSON yang valid. Pastikan Code.gs sudah support action "uploadFoto" dan sudah di-deploy ulang (Deploy > Manage deployments > Edit > Deploy).');
+    return {success:false};
+  }
+  if(!json.success){
+    // Code.gs sekarang bisa kirim pesan lewat "message" (kegagalan yang sudah diantisipasi,
+    // mis. data foto kosong) ATAU "error" (exception tak terduga, mis. DriveApp gagal).
+    const detail = json.message || json.error;
+    showToast('Gagal upload foto' + (detail?(': '+detail):' (tidak ada pesan error dari server)') + '.');
+  } else if(!json.url){
+    showToast('Upload foto sukses tapi server tidak mengembalikan URL foto. Cek Code.gs action "uploadFoto".');
+    json.success = false;
+  } else if(json.warning){
+    // Upload berhasil tapi ada peringatan (mis. gagal set sharing publik) — foto tersimpan
+    // tapi mungkin tidak tampil untuk semua orang. Tampilkan lebih lama karena pesannya panjang.
+    const t = document.getElementById('toast');
+    t.textContent = json.warning; t.classList.add('show');
+    setTimeout(()=>t.classList.remove('show'), 6000);
+  }
+  return json;
 }
 
 /* ---- mapping: model internal <-> baris Google Sheets ---- */
@@ -737,12 +735,39 @@ async function gasUploadFoto(dataUrl, filename){
  * akan tampil KOSONG walau datanya ada. Fungsi ini ambil 10 karakter tanggal-nya saja. */
 function toDateInput(v){
   if(!v) return '';
-  const m = String(v).match(/^(\d{4}-\d{2}-\d{2})/);
-  return m ? m[1] : '';
+  const s = String(v).trim();
+  if(!s) return '';
+  // Format ISO datetime penuh atau ISO date murni: "2024-05-01..." -> ambil 10 char pertama
+  let m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  if(m) return m[1];
+  // Format "D/M/Y" atau "M/D/Y" (mis. hasil Utilities.formatDate atau toLocaleDateString)
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(m){
+    let a = parseInt(m[1],10), b = parseInt(m[2],10);
+    const year = m[3];
+    // Kalau salah satu > 12, itu pasti hari; kalau ambigu (keduanya <=12) asumsikan D/M/Y (format Indonesia)
+    let day, month;
+    if(a > 12){ day = a; month = b; }
+    else if(b > 12){ day = b; month = a; }
+    else { day = a; month = b; } // default D/M/Y
+    return year + '-' + String(month).padStart(2,'0') + '-' + String(day).padStart(2,'0');
+  }
+  // Fallback terakhir: coba parse langsung pakai Date()
+  const d = new Date(s);
+  if(!isNaN(d.getTime())) return d.toISOString().slice(0,10);
+  return '';
+}
+/** Google Sheets kadang mengembalikan nilai numerik (mis. Nomor Siswa "2026001") sebagai tipe
+ * Number, bukan String, meskipun kolomnya berisi teks. Ini bikin perbandingan `===` di frontend
+ * gagal (mis. saat cari data untuk Edit) walau nilainya "sama". Fungsi ini memaksa jadi string
+ * bersih supaya id/nomor selalu konsisten dipakai untuk pencarian & perbandingan di seluruh app. */
+function toIdString(v){
+  if(v===null || v===undefined) return '';
+  return String(v).trim();
 }
 function sheetToMurid(row){
-  const nis = row['Nomor Siswa'];
-  const kelas = kelasList.find(k=>k.nomor===row['Kelas']);
+  const nis = toIdString(row['Nomor Siswa']);
+  const kelas = kelasList.find(k=>k.nomor===toIdString(row['Kelas']));
   return {
     id: nis, nis, nama: row['Nama Siswa']||'', tglLahir: toDateInput(row['Tanggal Lahir']),
     kelasId: kelas?kelas.id:'', tglGabung: toDateInput(row['Tanggal Gabung']), tglJenjang: toDateInput(row['Tanggal Jenjang di Kelas']),
@@ -760,7 +785,7 @@ function muridToSheet(m){
   };
 }
 function sheetToGuru(row){
-  const nomor = row['Nomor Induk Guru'];
+  const nomor = toIdString(row['Nomor Induk Guru']);
   return { id: nomor, nomor, nama: row['Nama Guru']||'', kelurahan: row['Kelurahan Domisili']||'', jenjang: row['Jenjang']||'' };
 }
 function guruToSheet(g){
@@ -768,8 +793,8 @@ function guruToSheet(g){
 }
 function sheetToKelas(row){
   return {
-    id: row['ID'], nomor: row['Nomor Grup Kelas']||'', nama: row['Nama Kelas']||row['Nomor Grup Kelas']||'',
-    guruId: row['Nomor Induk Guru']||'',
+    id: toIdString(row['ID']), nomor: toIdString(row['Nomor Grup Kelas']), nama: row['Nama Kelas']||row['Nomor Grup Kelas']||'',
+    guruId: toIdString(row['Nomor Induk Guru']),
     siswaIds: row['Nomor Siswa'] ? String(row['Nomor Siswa']).split(';').map(s=>s.trim()).filter(Boolean) : []
   };
 }
@@ -782,16 +807,16 @@ function kelasToSheet(k){
   };
 }
 function sheetToKehadiran(row){
-  const kelas = kelasList.find(k=>k.nomor===row['Nomor Grup Kelas']);
-  return { id: row['ID'], kelasId: kelas?kelas.id:'', tanggal: row['Tanggal Kelas']||'', jam: row['Jam Kelas']||'', materi: row['Materi Kelas']||'', kegiatan: row['Kegiatan']||'Offline' };
+  const kelas = kelasList.find(k=>k.nomor===toIdString(row['Nomor Grup Kelas']));
+  return { id: toIdString(row['ID']), kelasId: kelas?kelas.id:'', tanggal: toDateInput(row['Tanggal Kelas'])||row['Tanggal Kelas']||'', jam: row['Jam Kelas']||'', materi: row['Materi Kelas']||'', kegiatan: row['Kegiatan']||'Offline' };
 }
 function kehadiranToSheet(h){
   const kelas = kelasList.find(k=>k.id===h.kelasId);
   return { 'ID': h.id, 'Nomor Grup Kelas': kelas?kelas.nomor:'', 'Tanggal Kelas': h.tanggal||'', 'Jam Kelas': h.jam||'', 'Materi Kelas': h.materi||'', 'Kegiatan': h.kegiatan||'' };
 }
 function sheetToDetail(row){
-  const kelas = kelasList.find(k=>k.nomor===row['Nomor Grup Kelas']);
-  return { id: row['ID'], kehadiranId: row['ID Data Kehadiran']||'', kelasId: kelas?kelas.id:'', muridId: row['Nomor Siswa']||'', hadir: row['Kehadiran']||'Ya', keterangan: row['Keterangan']||'' };
+  const kelas = kelasList.find(k=>k.nomor===toIdString(row['Nomor Grup Kelas']));
+  return { id: toIdString(row['ID']), kehadiranId: toIdString(row['ID Data Kehadiran']), kelasId: kelas?kelas.id:'', muridId: toIdString(row['Nomor Siswa']), hadir: row['Kehadiran']||'Ya', keterangan: row['Keterangan']||'' };
 }
 function detailToSheet(d){
   const kelas = kelasList.find(k=>k.id===d.kelasId);
@@ -799,43 +824,50 @@ function detailToSheet(d){
 }
 
 function sheetToAkun(row){
-  return { id: row['ID'], username: row['Username']||'', password: row['Password']||'', role: row['Role']||'guru', nama: row['Nama']||'' };
+  return { id: toIdString(row['ID']), username: row['Username']||'', password: row['Password']||'', role: row['Role']||'guru', nama: row['Nama']||'' };
 }
 function akunToSheet(a){
   return { 'ID': a.id, 'Username': a.username, 'Password': a.password, 'Role': a.role, 'Nama': a.nama };
 }
 
-/** urutan penting: Akun & Guru & Kelas dulu, baru Siswa/Kehadiran/Detail (butuh referensi silang). */
-async function loadAllFromSheets(){
-  accounts = (await gasList('Akun')).map(sheetToAkun);
-  guruList = (await gasList('Guru')).map(sheetToGuru);
-  kelasList = (await gasList('Kelas')).map(sheetToKelas);
-  muridList = (await gasList('Siswa')).map(sheetToMurid);
-  kehadiranList = (await gasList('Kehadiran')).map(sheetToKehadiran);
-  detailList = (await gasList('KehadiranDetail')).map(sheetToDetail);
+/** urutan penting: Kelas harus siap dulu sebelum Siswa/Kehadiran/Detail (butuh referensi
+ * silang by nomor). Akun/Guru/Kelas sendiri tidak saling bergantung saat DIBACA, jadi
+ * di-fetch paralel per batch (bukan satu-satu berurutan) supaya boot jauh lebih cepat —
+ * Apps Script punya latensi/cold-start lumayan; 6 request berurutan bisa kerasa "nge-lag"
+ * / kayak sesi tidak nyambung padahal cuma masih loading. */
+async function loadAkunOnly(){
+  accounts = gasUrl ? (await gasList('Akun')).map(sheetToAkun) : [];
 }
+async function loadRestFromSheets(){
+  const [guru, kelas] = await Promise.all([gasList('Guru'), gasList('Kelas')]);
+  guruList = guru.map(sheetToGuru);
+  kelasList = kelas.map(sheetToKelas);
+  const [siswa, kehadiran, detail] = await Promise.all([gasList('Siswa'), gasList('Kehadiran'), gasList('KehadiranDetail')]);
+  muridList = siswa.map(sheetToMurid);
+  kehadiranList = kehadiran.map(sheetToKehadiran);
+  detailList = detail.map(sheetToDetail);
+}
+async function loadAllFromSheets(){ await loadAkunOnly(); await loadRestFromSheets(); }
 
 /* ================= BOOT ================= */
 async function boot(){
-  await loadGasUrl();
-  if(gasUrl){
-    await loadAllFromSheets();
-    if(accounts.length === 0){
-      accounts = [DEFAULT_ADMIN];
-      await gasUpsert('Akun', akunToSheet(DEFAULT_ADMIN));
-    }
-  } else {
-    // gasUrl belum diatur (misal baru pertama kali deploy) — tetap bisa login sebagai admin
-    // default supaya bisa buka menu Pengaturan dan isi URL-nya.
+  await loadAkunOnly();
+  if(accounts.length === 0){
     accounts = [DEFAULT_ADMIN];
+    if(gasUrl) await gasUpsert('Akun', akunToSheet(DEFAULT_ADMIN));
   }
-  // Coba pulihkan sesi login dari localStorage supaya tidak balik ke layar login tiap refresh.
+  // Restore sesi SEDINI mungkin (cuma butuh data Akun yang sudah siap di atas) — tidak perlu
+  // nunggu Guru/Kelas/Siswa/Kehadiran/Detail kelar dulu, supaya refresh terasa instan.
   const session = loadSession();
+  let restoredAcc = null;
   if(session){
-    const acc = accounts.find(a => a.id === session.id);
-    if(acc){ enterApp(acc); return; }
-    clearSession();
+    restoredAcc = accounts.find(a => a.id === session.id);
+    if(restoredAcc){ enterApp(restoredAcc); }
+    else { clearSession(); }
   }
+  // Lanjut load sisa data di background (paralel), lalu refresh tampilan begitu selesai.
+  await loadRestFromSheets();
+  if(restoredAcc){ refreshAllViews(); }
 }
 boot();
 
@@ -850,7 +882,6 @@ function enterApp(acc){
   document.getElementById('userRole').textContent = acc.role === 'admin' ? 'Administrator' : 'Guru';
   document.getElementById('userInitial').textContent = (acc.nama||'?').charAt(0).toUpperCase();
   document.querySelectorAll('.admin-only').forEach(el => el.style.display = acc.role === 'admin' ? '' : 'none');
-  if(!gasUrl && acc.role==='admin'){ showToast('URL Google Sheets belum diatur. Buka menu Pengaturan.'); }
   refreshAllViews();
 }
 async function doLogin(){
@@ -881,31 +912,10 @@ function goPage(name){
   document.getElementById('page-'+name).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.querySelector('.nav-item[data-page="'+name+'"]').classList.add('active');
-  const titles = {dashboard:'Dashboard', murid:'Master Data Murid', guru:'Master Data Guru', kelas:'Master Data Kelas', kehadiran:'Data Kehadiran', pengaturan:'Pengaturan'};
+  const titles = {dashboard:'Dashboard', murid:'Master Data Murid', guru:'Master Data Guru', kelas:'Master Data Kelas', kehadiran:'Data Kehadiran'};
   document.getElementById('topTitle').textContent = titles[name];
   document.getElementById('topCrumb').textContent = 'Dashboard' + (name==='dashboard' ? '' : ' > ' + titles[name]);
-  if(name==='pengaturan'){ document.getElementById('gasUrlInput').value = gasUrl; }
   refreshAllViews();
-}
-
-async function savePengaturanUrl(){
-  const url = document.getElementById('gasUrlInput').value.trim();
-  if(!url){ showToast('URL tidak boleh kosong.'); return; }
-  await saveGasUrl(url);
-  showToast('URL tersimpan. Memuat data dari Google Sheets...');
-  await loadAllFromSheets();
-  if(accounts.length === 0){
-    accounts = [DEFAULT_ADMIN];
-    await gasUpsert('Akun', akunToSheet(DEFAULT_ADMIN));
-  }
-  refreshAllViews();
-}
-async function testGasConnection(){
-  const url = document.getElementById('gasUrlInput').value.trim();
-  if(!url){ showToast('Isi URL dulu.'); return; }
-  if(url !== gasUrl){ await saveGasUrl(url); }
-  const rows = await gasList('Guru');
-  showToast('Koneksi berhasil. Sheet Guru berisi ' + rows.length + ' baris.');
 }
 
 function refreshAllViews(){
@@ -1077,11 +1087,23 @@ async function saveMurid(closeAfter){
   const nis = f_nis.value;
   const existing = editingMuridId ? muridList.find(m=>m.id===editingMuridId) : null;
   let fotoUrl = existing ? (existing.fotoUrl || '') : '';
+  const saveBtns = document.querySelectorAll('#muridModal .modal-foot .btn');
   if(pendingFotoAction === 'set' && pendingFotoDataUrl){
+    saveBtns.forEach(b=>b.disabled = true);
     showToast('Mengunggah foto ke Google Drive...');
     const up = await gasUploadFoto(pendingFotoDataUrl, 'siswa_' + nis + '_' + Date.now() + '.jpg');
-    if(up && up.success && up.url){ fotoUrl = up.url; renderFotoPreview(fotoUrl); }
-    else { showToast('Gagal upload foto, data lain tetap disimpan tanpa foto baru.'); }
+    saveBtns.forEach(b=>b.disabled = false);
+    if(up && up.success && up.url){
+      fotoUrl = up.url;
+      renderFotoPreview(fotoUrl);
+      pendingFotoAction = null; pendingFotoDataUrl = null; // foto sudah beres, jangan diulang upload
+    } else {
+      // Upload gagal: batalkan proses simpan supaya user tahu foto TIDAK berubah dan bisa coba lagi,
+      // alih-alih diam-diam menyimpan data lain tanpa foto baru (bikin user kira foto sudah tersimpan).
+      showToast('Simpan dibatalkan: upload foto gagal. Data murid belum disimpan, silakan coba lagi.');
+      switchTab('foto');
+      return;
+    }
   } else if(pendingFotoAction === 'delete'){
     fotoUrl = '';
   }
@@ -1450,16 +1472,32 @@ function openKelasForm(id){
       if(cb) cb.checked = true;
     });
   } else {
-    k_nomor.value = 'K' + (kelasList.length+1).toString().padStart(3,'0');
+    k_nomor.value = generateNomorKelas();
     k_nama.value=''; k_guru.value='';
   }
   openModal('kelasModal');
 }
+/** Dulu pakai kelasList.length+1 — rawan duplikat begitu ada kelas yang dihapus (panjang
+ * list berkurang tapi nomor besar sudah pernah dipakai). Sekarang pakai pola yang sama
+ * dengan generateNIS()/generateNomorGuru(): cari nomor urut terbesar yang SUDAH terpakai, +1. */
+function generateNomorKelas(){
+  const usedSeqs = kelasList
+    .map(k => (k.nomor||'').toString())
+    .filter(n => n.startsWith('K'))
+    .map(n => parseInt(n.slice(1), 10))
+    .filter(n => !isNaN(n));
+  const nextSeq = (usedSeqs.length ? Math.max(...usedSeqs) : 0) + 1;
+  return 'K' + nextSeq.toString().padStart(3,'0');
+}
 async function saveKelas(){
   const nama = k_nama.value.trim();
   if(!nama){ showToast('Nama kelas wajib diisi.'); return; }
+  const nomor = k_nomor.value.trim();
+  if(!nomor){ showToast('Nomor Grup Kelas wajib diisi.'); return; }
+  const dupe = kelasList.find(k => k.nomor === nomor && k.id !== editingKelasId);
+  if(dupe){ showToast('Nomor Grup Kelas "' + nomor + '" sudah dipakai kelas lain. Pakai nomor lain.'); return; }
   const siswaIds = Array.from(document.querySelectorAll('.k-siswa-cb:checked')).map(cb=>cb.value);
-  const data = { id: editingKelasId || 'k-'+Date.now(), nomor: k_nomor.value, nama, guruId: k_guru.value, siswaIds };
+  const data = { id: editingKelasId || 'k-'+Date.now(), nomor, nama, guruId: k_guru.value, siswaIds };
   if(editingKelasId){ kelasList = kelasList.map(k=>k.id===editingKelasId?data:k); }
   else { kelasList.push(data); }
   const res = await gasUpsert('Kelas', kelasToSheet(data));
@@ -1550,13 +1588,52 @@ async function saveDetail(){
 /* ================= DELETE ================= */
 function confirmDelete(type, id){
   document.getElementById('confirmDeleteBtn').onclick = async () => {
-    if(type==='murid'){ muridList = muridList.filter(m=>m.id!==id); await gasDelete('Siswa', id); renderMurid(); }
+    if(type==='murid'){
+      muridList = muridList.filter(m=>m.id!==id);
+      await gasDelete('Siswa', id);
+      // Lepaskan murid ini dari semua kelas yang masih mereferensikannya, supaya tidak
+      // ada NIS "hantu" nyangkut di kolom Nomor Siswa sheet Kelas.
+      const affectedKelas = kelasList.filter(k => (k.siswaIds||[]).includes(id));
+      for(const k of affectedKelas){
+        k.siswaIds = (k.siswaIds||[]).filter(sid => sid !== id);
+        await gasUpsert('Kelas', kelasToSheet(k));
+      }
+      // Hapus juga semua baris kehadiran-detail milik murid ini (biar tidak orphan).
+      const removedDetail = detailList.filter(d=>d.muridId===id);
+      detailList = detailList.filter(d=>d.muridId!==id);
+      for(const d of removedDetail){ await gasDelete('KehadiranDetail', d.id); }
+      renderKelasOptions(); renderKelas(); renderMurid();
+    }
     if(type==='guru'){
       guruList = guruList.filter(g=>g.id!==id); await gasDelete('Guru', id);
       accounts = accounts.filter(a=>a.id!=='acc-'+id); await gasDelete('Akun', 'acc-'+id);
-      renderGuru();
+      // Lepaskan guru ini dari kelas yang menjadikannya wali kelas, biar tidak orphan.
+      const affectedKelas = kelasList.filter(k => k.guruId===id);
+      for(const k of affectedKelas){
+        k.guruId = '';
+        await gasUpsert('Kelas', kelasToSheet(k));
+      }
+      renderKelas(); renderGuru();
     }
-    if(type==='kelas'){ kelasList = kelasList.filter(k=>k.id!==id); await gasDelete('Kelas', id); renderKelasOptions(); renderKelas(); }
+    if(type==='kelas'){
+      kelasList = kelasList.filter(k=>k.id!==id); await gasDelete('Kelas', id);
+      // Lepaskan murid yang masih menunjuk ke kelas yang dihapus.
+      const affectedMurid = muridList.filter(m=>m.kelasId===id);
+      for(const m of affectedMurid){
+        m.kelasId = '';
+        await gasUpsert('Siswa', muridToSheet(m));
+      }
+      // Hapus sesi kehadiran & detailnya yang terkait kelas ini, biar tidak orphan.
+      const affectedSesi = kehadiranList.filter(h=>h.kelasId===id);
+      kehadiranList = kehadiranList.filter(h=>h.kelasId!==id);
+      for(const h of affectedSesi){
+        await gasDelete('Kehadiran', h.id);
+        const removedDetail = detailList.filter(d=>d.kehadiranId===h.id);
+        detailList = detailList.filter(d=>d.kehadiranId!==h.id);
+        for(const d of removedDetail){ await gasDelete('KehadiranDetail', d.id); }
+      }
+      renderKelasOptions(); renderKelas(); renderMurid(); renderKehadiran();
+    }
     if(type==='kehadiran'){
       kehadiranList = kehadiranList.filter(h=>h.id!==id); await gasDelete('Kehadiran', id);
       const removed = detailList.filter(d=>d.kehadiranId===id);
