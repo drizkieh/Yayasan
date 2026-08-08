@@ -232,10 +232,36 @@
   .pagination .pg-btn:not(:disabled):hover{border-color:var(--blue-500);color:var(--blue-600);}
 
   /* detail murid page */
-  .field-value{font-size:13.5px;color:var(--ink-900);padding:2px 0 2px;min-height:19px;}
-  .detail-hero{display:flex;gap:18px;align-items:center;margin-bottom:18px;flex-wrap:wrap;}
-  .detail-hero img, .detail-hero .ph{width:88px;height:88px;border-radius:14px;object-fit:cover;background:var(--blue-50);flex-shrink:0;}
-  .detail-hero .ph{display:flex;align-items:center;justify-content:center;color:var(--blue-600);font-weight:800;font-size:28px;}
+  #muridDetailBody{background:transparent;border:none;padding:0;}
+  .field-value{font-size:13.5px;color:var(--ink-900);padding:2px 0 2px;min-height:19px;font-weight:600;}
+  .detail-banner{
+    position:relative; overflow:hidden; border-radius:16px; padding:26px 28px; margin-bottom:18px;
+    background:linear-gradient(120deg,var(--navy-950),var(--navy-800) 55%,var(--blue-600));
+    color:#fff; display:flex; gap:22px; align-items:center; flex-wrap:wrap;
+    box-shadow:0 16px 34px rgba(11,29,51,.22);
+  }
+  .detail-banner::after{
+    content:''; position:absolute; inset:0; pointer-events:none;
+    background:radial-gradient(circle at 88% 18%, rgba(255,255,255,.14), transparent 55%);
+  }
+  .detail-banner img, .detail-banner .ph{
+    position:relative; z-index:1; width:96px;height:96px;border-radius:16px;object-fit:cover;flex-shrink:0;
+    border:3px solid rgba(255,255,255,.35); box-shadow:0 10px 22px rgba(0,0,0,.25);
+  }
+  .detail-banner .ph{display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.14);color:#fff;font-weight:800;font-size:30px;}
+  .detail-banner .who{position:relative; z-index:1; min-width:0;}
+  .detail-banner .who .name{font-size:21px;font-weight:800;margin-bottom:8px;letter-spacing:-.01em;}
+  .detail-banner .who .meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  .detail-banner .pill{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.18);padding:4px 12px;border-radius:20px;font-weight:700;color:#fff;font-size:11.5px;letter-spacing:.02em;}
+
+  .detail-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;}
+  .detail-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;transition:box-shadow .15s,border-color .15s;}
+  .detail-card:hover{box-shadow:0 6px 18px rgba(15,23,42,.06);border-color:#d7e1f0;}
+  .detail-card .eyebrow{display:flex;align-items:center;gap:7px;margin-bottom:14px;}
+  .detail-card .eyebrow .ic{font-size:13px;}
+  .detail-card .form-grid{row-gap:16px;}
+  .detail-card .field{margin-bottom:0;}
+  .detail-card .field label{display:block;color:var(--ink-400);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-bottom:4px;}
   .detail-section{margin-bottom:20px;}
 
   ::-webkit-scrollbar{width:8px;height:8px;}
@@ -1272,43 +1298,27 @@ function renderMuridDetailPage(){
   const box = document.getElementById('muridDetailBody');
   if(!m){ box.innerHTML = '<div class="empty-state">Data murid tidak ditemukan.</div>'; return; }
   const dv = (label, val) => `<div class="field"><label>${label}</label><div class="field-value">${escapeHtml(val)||'-'}</div></div>`;
+  const section = (icon, title, fieldsHtml) => `
+    <div class="detail-card">
+      <div class="eyebrow"><span class="ic">${icon}</span> ${title}</div>
+      <div class="form-grid">${fieldsHtml}</div>
+    </div>`;
   box.innerHTML = `
-    <div class="detail-hero">
+    <div class="detail-banner">
       ${m.fotoUrl ? `<img src="${m.fotoUrl}" alt="">` : `<div class="ph">${escapeHtml((m.nama||'?').charAt(0).toUpperCase())}</div>`}
-      <div>
-        <div style="font-size:18px;font-weight:800;color:var(--ink-900);">${escapeHtml(m.nama)}</div>
-        <div style="color:var(--ink-400);font-size:13px;">Nomor Siswa: ${escapeHtml(m.nis)} &middot; ${escapeHtml(kelasLabel(m.kelasId))||'Belum ada kelas'}</div>
+      <div class="who">
+        <div class="name">${escapeHtml(m.nama)}</div>
+        <div class="meta">
+          <span class="pill">Nomor Siswa: ${escapeHtml(m.nis)}</span>
+          <span class="pill">${escapeHtml(kelasLabel(m.kelasId))||'Belum ada kelas'}</span>
+        </div>
       </div>
     </div>
-    <div class="detail-section">
-      <div class="eyebrow">Identitas</div>
-      <div class="form-grid">
-        ${dv('Nomor Siswa', m.nis)}
-        ${dv('Nama Siswa', m.nama)}
-        ${dv('Tanggal Lahir', m.tglLahir)}
-      </div>
-    </div>
-    <div class="detail-section">
-      <div class="eyebrow">Kelas & Jenjang</div>
-      <div class="form-grid">
-        ${dv('Kelas', kelasLabel(m.kelasId))}
-        ${dv('Tanggal Gabung', m.tglGabung)}
-        ${dv('Tanggal Jenjang di Kelas Saat Ini', m.tglJenjang)}
-      </div>
-    </div>
-    <div class="detail-section">
-      <div class="eyebrow">Alamat</div>
-      <div class="form-grid">
-        ${dv('Alamat', m.alamat)}
-        ${dv('RW', m.rw)}
-        ${dv('Kelurahan', m.kelurahan)}
-      </div>
-    </div>
-    <div class="detail-section">
-      <div class="eyebrow">Orang Tua</div>
-      <div class="form-grid">
-        ${dv('Nama Orang Tua', m.namaOrtu)}
-      </div>
+    <div class="detail-grid">
+      ${section('&#128100;', 'Identitas', dv('Nomor Siswa', m.nis) + dv('Nama Siswa', m.nama) + dv('Tanggal Lahir', m.tglLahir))}
+      ${section('&#127891;', 'Kelas & Jenjang', dv('Kelas', kelasLabel(m.kelasId)) + dv('Tanggal Gabung', m.tglGabung) + dv('Tanggal Jenjang di Kelas Saat Ini', m.tglJenjang))}
+      ${section('&#128205;', 'Alamat', dv('Alamat', m.alamat) + dv('RW', m.rw) + dv('Kelurahan', m.kelurahan))}
+      ${section('&#128101;', 'Orang Tua', dv('Nama Orang Tua', m.namaOrtu))}
     </div>
   `;
 }
