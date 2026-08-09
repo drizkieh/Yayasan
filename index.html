@@ -1075,11 +1075,16 @@ function closeModal(id){ document.getElementById(id).classList.add('hidden'); if
 
 /* ================= DASHBOARD ================= */
 function renderDashboard(){
-  document.getElementById('statMurid').textContent = muridList.length;
+  // Guru yang login lihat statistik & "Murid Terbaru" cuma dari kelasnya sendiri, konsisten
+  // dengan pembatasan yang sama di Data Murid, Data Kelas, dan Data Kehadiran.
+  const scopeKelasIds = currentGuru() ? new Set(visibleKelasList().map(k=>k.id)) : null;
+  const muridScoped = scopeKelasIds ? muridList.filter(m => scopeKelasIds.has(m.kelasId)) : muridList;
+  const kehadiranScoped = scopeKelasIds ? kehadiranList.filter(h => scopeKelasIds.has(h.kelasId)) : kehadiranList;
+  document.getElementById('statMurid').textContent = muridScoped.length;
   document.getElementById('statGuru').textContent = guruList.length;
-  document.getElementById('statKelas').textContent = kelasList.length;
-  document.getElementById('statSesi').textContent = kehadiranList.length;
-  const recent = [...muridList].sort((a,b)=> (b.createdAt||0)-(a.createdAt||0)).slice(0,5);
+  document.getElementById('statKelas').textContent = scopeKelasIds ? scopeKelasIds.size : kelasList.length;
+  document.getElementById('statSesi').textContent = kehadiranScoped.length;
+  const recent = [...muridScoped].sort((a,b)=> (b.createdAt||0)-(a.createdAt||0)).slice(0,5);
   document.getElementById('dashboardRecent').innerHTML = recent.length ? recent.map(m => `
     <tr><td>${m.nis}</td><td>${escapeHtml(m.nama)}</td><td>${escapeHtml(kelasLabel(m.kelasId))}</td>
     <td>${escapeHtml(m.namaOrtu)||'-'}</td></tr>
@@ -1293,7 +1298,11 @@ async function saveMurid(closeAfter){
 function renderMurid(){
   const q = (document.getElementById('muridSearch').value||'').toLowerCase();
   const fk = document.getElementById('muridFilterKelas').value;
+  // Guru cuma boleh lihat/kelola murid dari kelas yang dia jadi wali kelasnya — konsisten
+  // dengan dropdown kode kelas yang sudah dibatasi di form Tambah/Edit Murid (revisi #5).
+  const scopeKelasIds = currentGuru() ? new Set(visibleKelasList().map(k=>k.id)) : null;
   let rows = muridList.filter(m =>
+    (!scopeKelasIds || scopeKelasIds.has(m.kelasId)) &&
     (!q || m.nama.toLowerCase().includes(q) || (m.nis||'').includes(q)) &&
     (!fk || m.kelasId===fk)
   );
@@ -1728,8 +1737,10 @@ async function saveKelas(){
   renderKelasOptions(); renderKelas(); renderDashboard(); renderMurid(); closeModal('kelasModal');
 }
 function renderKelas(){
-  document.getElementById('kelasEmpty').classList.toggle('hidden', kelasList.length>0);
-  document.getElementById('kelasTableBody').innerHTML = kelasList.map(k => {
+  // Guru cuma lihat & kelola kelas yang dia wali kelasnya sendiri.
+  const rowsSource = visibleKelasList();
+  document.getElementById('kelasEmpty').classList.toggle('hidden', rowsSource.length>0);
+  document.getElementById('kelasTableBody').innerHTML = rowsSource.map(k => {
     const g = guruList.find(x=>x.id===k.guruId);
     const nisList = (k.siswaIds||[]).map(sid => { const m = muridList.find(x=>x.id===sid); return m?m.nis:null; }).filter(Boolean);
     return `<tr>
@@ -1789,8 +1800,11 @@ async function saveKehadiran(){
   renderKehadiran(); renderDashboard(); closeModal('kehadiranModal');
 }
 function renderKehadiran(){
-  document.getElementById('kehadiranEmpty').classList.toggle('hidden', kehadiranList.length>0);
-  document.getElementById('kehadiranTableBody').innerHTML = [...kehadiranList].sort((a,b)=>(b.tanggal||'').localeCompare(a.tanggal||'')).map(h => {
+  // Sama seperti Master Data Murid: guru cuma lihat sesi kehadiran dari kelas dia sendiri.
+  const scopeKelasIds = currentGuru() ? new Set(visibleKelasList().map(k=>k.id)) : null;
+  const rowsSource = scopeKelasIds ? kehadiranList.filter(h => scopeKelasIds.has(h.kelasId)) : kehadiranList;
+  document.getElementById('kehadiranEmpty').classList.toggle('hidden', rowsSource.length>0);
+  document.getElementById('kehadiranTableBody').innerHTML = [...rowsSource].sort((a,b)=>(b.tanggal||'').localeCompare(a.tanggal||'')).map(h => {
     const filled = detailList.filter(d=>d.kehadiranId===h.id).length;
     const k = kelasList.find(x=>x.id===h.kelasId);
     return `<tr>
