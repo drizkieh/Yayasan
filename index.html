@@ -264,6 +264,16 @@
   .detail-card .field label{display:block;color:var(--ink-400);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-bottom:4px;}
   .detail-section{margin-bottom:20px;}
 
+  /* report murid page */
+  .report-group{margin-bottom:16px;}
+  .report-group .head{
+    display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;
+    background:var(--navy-900); color:#fff; padding:12px 16px; border-radius:12px 12px 0 0;
+  }
+  .report-group .head .title{font-weight:800;font-size:14px;}
+  .report-group .head .sub{color:#cdd9ee;font-size:12px;}
+  .report-group .body{border:1px solid var(--line); border-top:none; border-radius:0 0 12px 12px; overflow:hidden;}
+
   ::-webkit-scrollbar{width:8px;height:8px;}
   ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:10px;}
 </style>
@@ -316,6 +326,7 @@
       <div class="nav-item admin-only" data-page="guru" onclick="goPage('guru')"><span class="ic">&#128100;</span> Data Guru</div>
       <div class="nav-item" data-page="kelas" onclick="goPage('kelas')"><span class="ic">&#128218;</span> Data Kelas</div>
       <div class="nav-item" data-page="kehadiran" onclick="goPage('kehadiran')"><span class="ic">&#128197;</span> Kehadiran</div>
+      <div class="nav-item" data-page="report" onclick="goPage('report')"><span class="ic">&#128202;</span> Report Murid</div>
     </div>
     <div class="sidebar-foot">
       <div class="nav-item" onclick="doLogout()"><span class="ic">&#8630;</span> Keluar</div>
@@ -444,7 +455,7 @@
             </div>
           </div>
           <table>
-            <thead><tr><th>ID</th><th>Nomor Grup Kelas</th><th>Nama Kelas</th><th>Nomor Induk Guru</th><th>Nama Guru</th><th>Nomor Siswa</th><th>Aksi</th></tr></thead>
+            <thead><tr><th>ID</th><th>Nomor Grup Kelas</th><th>Nama Kelas</th><th>Jenjang</th><th>Nomor Induk Guru</th><th>Nama Guru</th><th>Nomor Siswa</th><th>Aksi</th></tr></thead>
             <tbody id="kelasTableBody"></tbody>
           </table>
           <div id="kelasEmpty" class="empty-state hidden">Belum ada data kelas.</div>
@@ -470,6 +481,17 @@
           </table>
           <div id="kehadiranEmpty" class="empty-state hidden">Belum ada sesi kehadiran.</div>
         </div>
+      </div>
+
+      <!-- REPORT MURID -->
+      <div class="page" id="page-report">
+        <div class="page-head">
+          <div><h2>Report Murid</h2><div class="crumbs">Dashboard &gt; Report Murid</div></div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-outline" onclick="printReportMurid()">&#128424; Print Report</button>
+          </div>
+        </div>
+        <div id="reportMuridBody"></div>
       </div>
 
     </div>
@@ -607,6 +629,7 @@
       <div class="form-grid">
         <div class="field"><label>Nomor Grup Kelas</label><input id="k_nomor" placeholder="mis. K-001"></div>
         <div class="field"><label>Nama Kelas</label><input id="k_nama" placeholder="mis. VII A"></div>
+        <div class="field"><label>Jenjang Kelas</label><select id="k_jenjang"><option value="">Pilih jenjang</option><option value="Muda">Muda</option><option value="Pratama">Pratama</option></select></div>
         <div class="field full"><label>Wali Kelas</label><select id="k_guru"><option value="">Pilih guru</option></select></div>
         <div class="field full">
           <label>Anggota Siswa</label>
@@ -621,28 +644,35 @@
   </div>
 </div>
 
-<!-- ============ MODAL: KEHADIRAN SESSION FORM ============ -->
+<!-- ============ MODAL: KEHADIRAN SESSION + ABSENSI (1 form gabungan) ============ -->
 <div class="modal-backdrop hidden" id="kehadiranModal">
-  <div class="modal modal-sm">
-    <div class="modal-head"><h3>Buat Sesi Kehadiran</h3><button class="close-x" onclick="closeModal('kehadiranModal')">&times;</button></div>
+  <div class="modal">
+    <div class="modal-head"><h3 id="kehadiranModalTitle">Buat Sesi Kehadiran</h3><button class="close-x" onclick="closeModal('kehadiranModal')">&times;</button></div>
     <div class="modal-body">
-      <div class="field"><label>Kelas</label><select id="h_kelas"><option value="">Pilih kelas</option></select></div>
-      <div class="field"><label>Tanggal Kelas</label><input type="date" id="h_tanggal"></div>
-      <div class="field"><label>Jam Kelas</label><input type="time" id="h_jam"></div>
-      <div class="field"><label>Materi Kelas</label><input id="h_materi"></div>
-      <div class="field"><label>Kegiatan</label><select id="h_kegiatan"><option>Offline</option><option>Online</option></select></div>
+      <div class="form-grid">
+        <div class="field"><label>Kelas</label><select id="h_kelas" onchange="renderKehadiranChecklist()"><option value="">Pilih kelas</option></select></div>
+        <div class="field"><label>Tanggal Kelas</label><input type="date" id="h_tanggal"></div>
+        <div class="field"><label>Jam Kelas</label><input type="time" id="h_jam"></div>
+        <div class="field"><label>Materi Kelas</label><input id="h_materi"></div>
+        <div class="field"><label>Kegiatan</label><select id="h_kegiatan"><option>Offline</option><option>Online</option></select></div>
+      </div>
+      <div class="eyebrow" style="margin-top:16px;">Absensi Murid</div>
+      <table>
+        <thead><tr><th>NIS</th><th>Nama</th><th>Hadir</th><th>Keterangan</th></tr></thead>
+        <tbody id="h_siswaChecklist"><tr><td colspan="4" style="text-align:center;color:var(--ink-400);">Pilih kelas dulu untuk memuat daftar murid.</td></tr></tbody>
+      </table>
     </div>
     <div class="modal-foot">
       <button class="btn btn-outline" onclick="closeModal('kehadiranModal')">Batal</button>
-      <button class="btn btn-primary" data-busy-text="Menyimpan..." onclick="withBusy(this, saveKehadiran)">Buat Sesi</button>
+      <button class="btn btn-primary" data-busy-text="Menyimpan..." onclick="withBusy(this, saveKehadiran)">Simpan Sesi & Absensi</button>
     </div>
   </div>
 </div>
 
-<!-- ============ MODAL: KEHADIRAN DETAIL (absen) ============ -->
+<!-- ============ MODAL: KEHADIRAN DETAIL (edit absensi sesi lama) ============ -->
 <div class="modal-backdrop hidden" id="detailModal">
   <div class="modal">
-    <div class="modal-head"><h3>Isi Kehadiran Siswa</h3><button class="close-x" onclick="closeModal('detailModal')">&times;</button></div>
+    <div class="modal-head"><h3>Edit Absensi Sesi</h3><button class="close-x" onclick="closeModal('detailModal')">&times;</button></div>
     <div class="modal-body">
       <table>
         <thead><tr><th>NIS</th><th>Nama</th><th>Hadir</th><th>Keterangan</th></tr></thead>
@@ -899,6 +929,7 @@ function guruToSheet(g){
 function sheetToKelas(row){
   return {
     id: toIdString(row['ID']), nomor: toIdString(row['Nomor Grup Kelas']), nama: row['Nama Kelas']||row['Nomor Grup Kelas']||'',
+    jenjang: row['Jenjang Kelas']||'',
     guruId: toIdString(row['Nomor Induk Guru']),
     siswaIds: row['Nomor Siswa'] ? String(row['Nomor Siswa']).split(';').map(s=>s.trim()).filter(Boolean) : []
   };
@@ -906,7 +937,7 @@ function sheetToKelas(row){
 function kelasToSheet(k){
   const g = guruList.find(x=>x.id===k.guruId);
   return {
-    'ID': k.id, 'Nomor Grup Kelas': k.nomor, 'Nama Kelas': k.nama,
+    'ID': k.id, 'Nomor Grup Kelas': k.nomor, 'Nama Kelas': k.nama, 'Jenjang Kelas': k.jenjang||'',
     'Nomor Induk Guru': k.guruId||'', 'Nama Guru': g?g.nama:'',
     'Nomor Siswa': (k.siswaIds||[]).join('; ')
   };
@@ -1022,7 +1053,7 @@ function goPage(name){
   document.getElementById('page-'+name).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.querySelector('.nav-item[data-page="'+name+'"]').classList.add('active');
-  const titles = {dashboard:'Dashboard', murid:'Master Data Murid', guru:'Master Data Guru', kelas:'Master Data Kelas', kehadiran:'Data Kehadiran'};
+  const titles = {dashboard:'Dashboard', murid:'Master Data Murid', guru:'Master Data Guru', kelas:'Master Data Kelas', kehadiran:'Data Kehadiran', report:'Report Murid'};
   document.getElementById('topTitle').textContent = titles[name];
   document.getElementById('topCrumb').textContent = 'Dashboard' + (name==='dashboard' ? '' : ' > ' + titles[name]);
   refreshAllViews();
@@ -1035,6 +1066,7 @@ function refreshAllViews(){
   renderGuru();
   renderKelas();
   renderKehadiran();
+  renderReportMurid();
 }
 
 /* ================= MODAL HELPERS ================= */
@@ -1058,6 +1090,20 @@ function kelasLabel(id){
   const k = kelasList.find(k=>k.id===id);
   return k ? k.nama : '-';
 }
+/** Guru yang sedang login (kalau currentUser.role==='guru') — dicari lewat pola id akun
+ * 'acc-'+guru.id yang dipakai saat saveGuru() membuat akun. */
+function currentGuru(){
+  if(!currentUser || currentUser.role !== 'guru') return null;
+  return guruList.find(g => ('acc-'+g.id) === currentUser.id) || null;
+}
+/** Daftar kelas yang boleh dilihat/dipilih user yang sedang login. Admin lihat semua;
+ * guru cuma lihat kelas yang dia jadi wali kelasnya (dipakai saat daftar murid baru &
+ * bikin sesi kehadiran, sesuai revisi #5). */
+function visibleKelasList(){
+  const g = currentGuru();
+  if(!g) return kelasList;
+  return kelasList.filter(k => k.guruId === g.id);
+}
 function guruLabel(id){
   const g = guruList.find(g=>g.id===id);
   return g ? g.nama : '-';
@@ -1066,7 +1112,8 @@ function escapeHtml(s){ return (s||'').toString().replace(/[&<>"']/g, c=>({'&':'
 
 /* ================= DATA MURID ================= */
 function renderKelasOptions(){
-  const opts = kelasList.map(k=>`<option value="${k.id}">${escapeHtml(k.nama)}</option>`).join('');
+  const visible = visibleKelasList();
+  const opts = visible.map(k=>`<option value="${k.id}">${escapeHtml(k.nama)}</option>`).join('');
   document.getElementById('f_kelas').innerHTML = '<option value="">Pilih kelas</option>' + opts;
   document.getElementById('muridFilterKelas').innerHTML = '<option value="">Semua Kelas</option>' + opts;
   document.getElementById('h_kelas').innerHTML = '<option value="">Pilih kelas</option>' + opts;
@@ -1376,6 +1423,83 @@ function printAllMurid(){
   window.print();
 }
 
+/* ---- report murid: dikelompokkan per kode kelas + wali kelas (revisi #6) ---- */
+function reportGroups(){
+  // Guru cuma lihat report kelas dia sendiri, konsisten dengan visibleKelasList().
+  const kelasForReport = visibleKelasList();
+  const kelasIds = new Set(kelasForReport.map(k=>k.id));
+  const groups = kelasForReport.map(k => ({
+    kelas: k,
+    guru: guruList.find(g=>g.id===k.guruId) || null,
+    murid: muridList.filter(m => m.kelasId === k.id)
+  })).sort((a,b) => (a.kelas.nomor||'').localeCompare(b.kelas.nomor||''));
+  // Kalau admin (lihat semua kelas), sertakan juga grup "Belum Ada Kelas".
+  if(!currentGuru()){
+    const tanpaKelas = muridList.filter(m => !m.kelasId || !kelasIds.has(m.kelasId));
+    if(tanpaKelas.length) groups.push({ kelas:{nomor:'-', nama:'Belum Ada Kelas', jenjang:''}, guru:null, murid:tanpaKelas });
+  }
+  return groups;
+}
+function reportGroupTableHtml(g){
+  if(!g.murid.length) return '<div class="empty-state">Belum ada murid di kelas ini.</div>';
+  return `<table>
+    <thead><tr><th>Nomor Siswa</th><th>Nama Siswa</th><th>Tanggal Lahir</th><th>Nama Orang Tua</th></tr></thead>
+    <tbody>${g.murid.map(m=>`<tr>
+      <td>${escapeHtml(m.nis)}</td><td>${escapeHtml(m.nama)}</td><td>${m.tglLahir||'-'}</td><td>${escapeHtml(m.namaOrtu)||'-'}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+function renderReportMurid(){
+  const box = document.getElementById('reportMuridBody');
+  if(!box) return;
+  const groups = reportGroups();
+  if(!groups.length){ box.innerHTML = '<div class="empty-state">Belum ada data kelas/murid untuk ditampilkan.</div>'; return; }
+  box.innerHTML = groups.map(g => `
+    <div class="report-group">
+      <div class="head">
+        <div>
+          <div class="title">${escapeHtml(g.kelas.nomor)} &middot; ${escapeHtml(g.kelas.nama)}${g.kelas.jenjang ? ' ('+escapeHtml(g.kelas.jenjang)+')' : ''}</div>
+          <div class="sub">Wali Kelas: ${g.guru ? escapeHtml(g.guru.nama) : '-'} &middot; ${g.murid.length} murid</div>
+        </div>
+      </div>
+      <div class="body">${reportGroupTableHtml(g)}</div>
+    </div>
+  `).join('');
+}
+function printReportMurid(){
+  const groups = reportGroups();
+  document.getElementById('printArea').innerHTML = `
+    <div style="font-family:Arial;">
+      <h2 style="margin-bottom:0;">Report Murid per Kelas</h2>
+      <div style="color:#555;margin-bottom:14px;">SMP IT Cerdas Berkarakter — Yayasan Sekolah</div>
+      ${groups.map(g => `
+        <div style="margin-bottom:18px;">
+          <div style="background:#eee;padding:8px 10px;font-weight:bold;">
+            ${escapeHtml(g.kelas.nomor)} - ${escapeHtml(g.kelas.nama)}${g.kelas.jenjang ? ' ('+escapeHtml(g.kelas.jenjang)+')' : ''}
+            — Wali Kelas: ${g.guru ? escapeHtml(g.guru.nama) : '-'}
+          </div>
+          <table style="width:100%;border-collapse:collapse;font-size:12px;">
+            <thead><tr>
+              <th style="padding:6px;text-align:left;border-bottom:1px solid #ccc;">Nomor Siswa</th>
+              <th style="padding:6px;text-align:left;border-bottom:1px solid #ccc;">Nama Siswa</th>
+              <th style="padding:6px;text-align:left;border-bottom:1px solid #ccc;">Tanggal Lahir</th>
+              <th style="padding:6px;text-align:left;border-bottom:1px solid #ccc;">Nama Orang Tua</th>
+            </tr></thead>
+            <tbody>
+              ${g.murid.length ? g.murid.map(m=>`<tr>
+                <td style="padding:6px;border-bottom:1px solid #ddd;">${escapeHtml(m.nis)}</td>
+                <td style="padding:6px;border-bottom:1px solid #ddd;">${escapeHtml(m.nama)}</td>
+                <td style="padding:6px;border-bottom:1px solid #ddd;">${m.tglLahir||'-'}</td>
+                <td style="padding:6px;border-bottom:1px solid #ddd;">${escapeHtml(m.namaOrtu)||'-'}</td>
+              </tr>`).join('') : '<tr><td colspan="4" style="padding:6px;color:#777;">Belum ada murid.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      `).join('')}
+    </div>`;
+  window.print();
+}
+
 /* ---- export CSV (siap import ke Google Sheets) ---- */
 function toCSVField(v){
   const s = (v==null?'':String(v));
@@ -1565,14 +1689,14 @@ function openKelasForm(id){
     </label>`).join('') : '<div style="color:var(--ink-400);font-size:12.5px;">Belum ada data murid.</div>';
   if(id){
     const k = kelasList.find(x=>x.id===id);
-    k_nomor.value = k.nomor; k_nama.value = k.nama; k_guru.value = k.guruId||'';
+    k_nomor.value = k.nomor; k_nama.value = k.nama; k_jenjang.value = k.jenjang||''; k_guru.value = k.guruId||'';
     (k.siswaIds||[]).forEach(sid => {
       const cb = listBox.querySelector(`input[value="${sid}"]`);
       if(cb) cb.checked = true;
     });
   } else {
     k_nomor.value = generateNomorKelas();
-    k_nama.value=''; k_guru.value='';
+    k_nama.value=''; k_jenjang.value=''; k_guru.value='';
   }
   openModal('kelasModal');
 }
@@ -1596,7 +1720,7 @@ async function saveKelas(){
   const dupe = kelasList.find(k => k.nomor === nomor && k.id !== editingKelasId);
   if(dupe){ showToast('Nomor Grup Kelas "' + nomor + '" sudah dipakai kelas lain. Pakai nomor lain.'); return; }
   const siswaIds = Array.from(document.querySelectorAll('.k-siswa-cb:checked')).map(cb=>cb.value);
-  const data = { id: editingKelasId || 'k-'+Date.now(), nomor, nama, guruId: k_guru.value, siswaIds };
+  const data = { id: editingKelasId || 'k-'+Date.now(), nomor, nama, jenjang: k_jenjang.value, guruId: k_guru.value, siswaIds };
   if(editingKelasId){ kelasList = kelasList.map(k=>k.id===editingKelasId?data:k); }
   else { kelasList.push(data); }
   const res = await gasUpsert('Kelas', kelasToSheet(data));
@@ -1609,7 +1733,7 @@ function renderKelas(){
     const g = guruList.find(x=>x.id===k.guruId);
     const nisList = (k.siswaIds||[]).map(sid => { const m = muridList.find(x=>x.id===sid); return m?m.nis:null; }).filter(Boolean);
     return `<tr>
-      <td>${k.id}</td><td><b>${k.nomor}</b></td><td>${escapeHtml(k.nama)}</td><td>${g?g.nomor:'-'}</td><td>${escapeHtml(g?g.nama:'-')}</td>
+      <td>${k.id}</td><td><b>${k.nomor}</b></td><td>${escapeHtml(k.nama)}</td><td>${escapeHtml(k.jenjang)||'-'}</td><td>${g?g.nomor:'-'}</td><td>${escapeHtml(g?g.nama:'-')}</td>
       <td>${nisList.length ? nisList.join(', ') : '-'}</td>
       <td><div class="icon-row">
         <button class="btn-ghost" onclick="openKelasForm('${k.id}')">&#9998;</button>
@@ -1622,7 +1746,25 @@ function renderKelas(){
 /* ================= KEHADIRAN ================= */
 function openKehadiranForm(){
   h_kelas.value=''; h_tanggal.value=''; h_jam.value=''; h_materi.value=''; h_kegiatan.value='Offline';
+  renderKehadiranChecklist();
   openModal('kehadiranModal');
+}
+/** Munculkan daftar murid dari kelas yang dipilih, langsung di form yang sama, biar guru
+ * bisa isi jam/materi + ceklist absensi sekaligus dalam satu kali submit (revisi #1). */
+function renderKehadiranChecklist(){
+  const box = document.getElementById('h_siswaChecklist');
+  const kelas = kelasList.find(k=>k.id===h_kelas.value);
+  if(!kelas){ box.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--ink-400);">Pilih kelas dulu untuk memuat daftar murid.</td></tr>'; return; }
+  const siswaIds = kelas.siswaIds||[];
+  if(!siswaIds.length){ box.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--ink-400);">Kelas ini belum punya anggota siswa.</td></tr>'; return; }
+  box.innerHTML = siswaIds.map(sid => {
+    const m = muridList.find(x=>x.id===sid);
+    return `<tr>
+      <td>${m?m.nis:'-'}</td><td>${m?escapeHtml(m.nama):'(murid dihapus)'}</td>
+      <td><select data-murid="${sid}" class="hk-hadir"><option selected>Ya</option><option>Tidak</option></select></td>
+      <td><input data-murid="${sid}" class="hk-ket" placeholder="Keterangan"></td>
+    </tr>`;
+  }).join('');
 }
 async function saveKehadiran(){
   if(!h_kelas.value || !h_tanggal.value){ showToast('Kelas dan tanggal wajib diisi.'); return; }
@@ -1631,16 +1773,19 @@ async function saveKehadiran(){
     materi: h_materi.value.trim(), kegiatan: h_kegiatan.value
   };
   kehadiranList.push(sesi);
-  const kelas = kelasList.find(k=>k.id===sesi.kelasId);
-  const siswaIds = kelas ? (kelas.siswaIds||[]) : [];
-  const newDetails = [];
-  siswaIds.forEach((sid, idx) => {
-    const d = { id:'hd-'+Date.now()+'-'+idx, kehadiranId: sesi.id, kelasId: sesi.kelasId, muridId: sid, hadir:'Ya', keterangan:'' };
-    detailList.push(d); newDetails.push(d);
+  // Ambil status hadir/keterangan langsung dari ceklist yang sudah diisi di form yang sama,
+  // bukan default "Ya" semua seperti sebelumnya.
+  const rows = Array.from(document.querySelectorAll('#h_siswaChecklist .hk-hadir'));
+  const newDetails = rows.map((sel, idx) => {
+    const sid = sel.dataset.murid;
+    const ket = document.querySelector(`#h_siswaChecklist .hk-ket[data-murid="${sid}"]`);
+    const d = { id:'hd-'+Date.now()+'-'+idx, kehadiranId: sesi.id, kelasId: sesi.kelasId, muridId: sid, hadir: sel.value, keterangan: ket?ket.value.trim():'' };
+    detailList.push(d);
+    return d;
   });
   await gasUpsert('Kehadiran', kehadiranToSheet(sesi));
   for(const d of newDetails){ await gasUpsert('KehadiranDetail', detailToSheet(d)); }
-  showToast('Sesi kehadiran tersimpan ke Google Sheets.');
+  showToast('Sesi kehadiran & absensi tersimpan ke Google Sheets.');
   renderKehadiran(); renderDashboard(); closeModal('kehadiranModal');
 }
 function renderKehadiran(){
@@ -1652,7 +1797,7 @@ function renderKehadiran(){
       <td>${h.id}</td><td>${k?k.nomor:'-'}</td><td>${h.tanggal}</td><td>${h.jam||'-'}</td>
       <td>${escapeHtml(h.materi)||'-'}</td><td>${h.kegiatan}</td><td>${filled} siswa</td>
       <td><div class="icon-row">
-        <button class="btn-ghost" onclick="openDetail('${h.id}')">&#128203;</button>
+        <button class="btn-ghost" title="Edit Absensi" onclick="openDetail('${h.id}')">&#128203;</button>
         <button class="btn-ghost" onclick="confirmDelete('kehadiran','${h.id}')">&#128465;</button>
       </div></td>
     </tr>`;
