@@ -636,7 +636,8 @@
         <div class="field"><label>Jenjang Kelas</label><select id="k_jenjang"><option value="">Pilih jenjang</option><option value="Muda">Muda</option><option value="Pratama">Pratama</option></select></div>
         <div class="field full"><label>Wali Kelas</label><select id="k_guru"><option value="">Pilih guru</option></select></div>
         <div class="field full">
-          <label>Anggota Siswa</label>
+          <label>Anggota Siswa <span id="k_siswaCount" style="font-weight:400;color:var(--ink-400);"></span></label>
+          <input id="k_siswaSearch" placeholder="Cari nama atau nomor siswa..." style="margin-bottom:8px;" oninput="filterKelasSiswaList()">
           <div id="k_siswaList" style="max-height:200px;overflow-y:auto;border:1px solid var(--line);border-radius:9px;padding:8px;"></div>
         </div>
       </div>
@@ -1710,10 +1711,11 @@ function setGuruPage(p){ guruPage = p; renderGuru(); }
 function openKelasForm(id){
   editingKelasId = id || null;
   document.getElementById('kelasModalTitle').textContent = id ? 'Edit Kelas' : 'Tambah Kelas';
+  document.getElementById('k_siswaSearch').value = '';
   const listBox = document.getElementById('k_siswaList');
   listBox.innerHTML = muridList.length ? muridList.map(m=>`
-    <label class="siswa-check-row">
-      <input type="checkbox" value="${m.id}" class="k-siswa-cb"> ${escapeHtml(m.nama)} <span class="nis">(${m.nis})</span>
+    <label class="siswa-check-row" data-name="${escapeHtml(m.nama).toLowerCase()}" data-nis="${(m.nis||'').toLowerCase()}">
+      <input type="checkbox" value="${m.id}" class="k-siswa-cb" onchange="updateKelasSiswaCount()"> ${escapeHtml(m.nama)} <span class="nis">(${m.nis})</span>
     </label>`).join('') : '<div style="color:var(--ink-400);font-size:12.5px;">Belum ada data murid.</div>';
   if(id){
     const k = kelasList.find(x=>x.id===id);
@@ -1726,7 +1728,24 @@ function openKelasForm(id){
     k_nomor.value = generateNomorKelas();
     k_nama.value=''; k_jenjang.value=''; k_guru.value='';
   }
+  updateKelasSiswaCount();
   openModal('kelasModal');
+}
+/** Cari murid di daftar Anggota Siswa (nama/nomor siswa) — baris yang tidak cocok cuma
+ * disembunyikan (display:none), bukan dihapus dari DOM, supaya centang yang sudah dipilih
+ * di baris lain (yang lagi disembunyikan sekalipun) tidak ikut hilang. Penting waktu
+ * jumlah murid sudah banyak. */
+function filterKelasSiswaList(){
+  const q = (document.getElementById('k_siswaSearch').value||'').toLowerCase().trim();
+  document.querySelectorAll('#k_siswaList .siswa-check-row').forEach(row => {
+    const match = !q || row.dataset.name.includes(q) || row.dataset.nis.includes(q);
+    row.style.display = match ? '' : 'none';
+  });
+}
+function updateKelasSiswaCount(){
+  const total = document.querySelectorAll('#k_siswaList .k-siswa-cb').length;
+  const checked = document.querySelectorAll('#k_siswaList .k-siswa-cb:checked').length;
+  document.getElementById('k_siswaCount').textContent = total ? `(${checked} dari ${total} dipilih)` : '';
 }
 /** Dulu pakai kelasList.length+1 — rawan duplikat begitu ada kelas yang dihapus (panjang
  * list berkurang tapi nomor besar sudah pernah dipakai). Sekarang pakai pola yang sama
