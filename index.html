@@ -329,7 +329,7 @@
       <div class="nav-item" data-page="report" onclick="goPage('report')"><span class="ic">&#128202;</span> Report Murid</div>
     </div>
     <div class="sidebar-foot">
-      <div class="nav-item" onclick="doLogout()"><span class="ic">&#8630;</span> Keluar</div>
+      <div class="nav-item" onclick="openModal('logoutModal')"><span class="ic">&#8630;</span> Keluar</div>
     </div>
   </div>
 
@@ -698,6 +698,18 @@
   </div>
 </div>
 
+<!-- ============ CONFIRM LOGOUT ============ -->
+<div class="modal-backdrop hidden" id="logoutModal">
+  <div class="modal modal-sm">
+    <div class="modal-head"><h3>Konfirmasi Keluar</h3><button class="close-x" onclick="closeModal('logoutModal')">&times;</button></div>
+    <div class="modal-body">Yakin mau keluar dari akun ini?</div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeModal('logoutModal')">Batal</button>
+      <button class="btn btn-red" onclick="doLogout()">Ya, Keluar</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="toast"></div>
 <div id="printArea"></div>
 
@@ -1038,13 +1050,16 @@ async function doLogin(){
   errBox.classList.add('hidden');
   saveSession(acc);
   enterApp(acc);
+  showToast('Selamat datang, ' + acc.nama + '!');
 }
 function doLogout(){
+  closeModal('logoutModal');
   clearSession();
   currentUser = null;
   document.getElementById('app').classList.add('hidden');
   document.getElementById('loginScreen').classList.remove('hidden');
   document.getElementById('loginUser').value = ''; document.getElementById('loginPass').value = '';
+  showToast('Anda berhasil keluar.');
 }
 
 /* ================= NAV ================= */
