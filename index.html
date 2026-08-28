@@ -332,9 +332,6 @@
       <div class="nav-item" data-page="kehadiran" onclick="goPage('kehadiran')"><span class="ic">&#128197;</span> Kehadiran</div>
       <div class="nav-item" data-page="report" onclick="goPage('report')"><span class="ic">&#128202;</span> Report Murid</div>
     </div>
-    <div class="sidebar-foot">
-      <div class="nav-item" onclick="openModal('logoutModal')"><span class="ic">&#8630;</span> Keluar</div>
-    </div>
   </div>
 
   <div class="main">
@@ -352,6 +349,9 @@
             <div id="userRole">Administrator</div>
           </div>
         </div>
+        <button class="btn btn-outline" onclick="openModal('logoutModal')" title="Keluar" style="padding:6px 12px;color:var(--red-600);border-color:#fecaca;background:#fff5f5;">
+          &#8630; Keluar
+        </button>
       </div>
     </div>
 
@@ -1151,6 +1151,7 @@ function openMuridForm(id){
   switchTab('identitas');
   if(id){
     const m = muridList.find(x=>x.id===id);
+    if(!m){ showToast('Data murid tidak ditemukan.'); return; }
     f_nis.value = m.nis; f_nama.value = m.nama; f_tgllahir.value = m.tglLahir||'';
     f_kelas.value = m.kelasId||''; f_tglgabung.value = m.tglGabung||'';
     f_tgljenjang.value = m.tglJenjang||''; f_alamat.value = m.alamat||''; f_rw.value = m.rw||'';
@@ -1302,15 +1303,40 @@ async function saveMurid(closeAfter){
     namaOrtu: f_namaortu.value.trim(), fotoUrl,
     createdAt: editingMuridId ? (existing||{}).createdAt || Date.now() : Date.now()
   };
+  const oldKelasId = existing ? (existing.kelasId || '') : '';
+  const newKelasId = f_kelas.value;
+
   if(editingMuridId){
     muridList = muridList.map(m => m.id===editingMuridId ? data : m);
   } else {
     muridList.push(data);
   }
   const res = await gasUpsert('Siswa', muridToSheet(data));
+
+  // Sinkronisasi data anggota siswa di kelas jika kelasId berubah atau baru dipilih
+  if(oldKelasId !== newKelasId){
+    if(oldKelasId){
+      const oldK = kelasList.find(k=>k.id===oldKelasId);
+      if(oldK){
+        oldK.siswaIds = (oldK.siswaIds||[]).filter(sid=>sid!==data.id);
+        await gasUpsert('Kelas', kelasToSheet(oldK));
+      }
+    }
+    if(newKelasId){
+      const newK = kelasList.find(k=>k.id===newKelasId);
+      if(newK){
+        newK.siswaIds = newK.siswaIds || [];
+        if(!newK.siswaIds.includes(data.id)){
+          newK.siswaIds.push(data.id);
+          await gasUpsert('Kelas', kelasToSheet(newK));
+        }
+      }
+    }
+  }
+
   if(res && res.success){ showToast('Data murid tersimpan ke Google Sheets.'); }
   pendingFotoAction = null; pendingFotoDataUrl = null;
-  renderMurid(); renderDashboard();
+  renderKelasOptions(); renderKelas(); renderMurid(); renderDashboard();
   if(closeAfter){ closeModal('muridModal'); }
   else { editingMuridId = data.id; }
 }
@@ -1613,7 +1639,7 @@ async function saveGuru(){
   const nama = g_nama.value.trim();
   const username = g_username.value.trim();
   if(!nama || !username){ showToast('Nama dan username wajib diisi.'); return; }
-  const dupe = accounts.find(a => a.username===username && a.id !== ('acc-'+editingGuruId));
+  const dupe = accounts.find(a => a.username===username && a.id !== (editingGuruId ? 'acc-'+editingGuruId : null));
   if(dupe){ showToast('Username sudah digunakan.'); return; }
   const nomor = g_nomor.value;
   const data = {
@@ -1833,7 +1859,7 @@ async function saveKehadiran(){
     return d;
   });
   await gasUpsert('Kehadiran', kehadiranToSheet(sesi));
-  for(const d of newDetails){ await gasUpsert('KehadiranDetail', detailToSheet(d)); }
+  await Promise.all(newDetails.map(d => gasUpsert('KehadiranDetail', detailToSheet(d))));
   showToast('Sesi kehadiran & absensi tersimpan ke Google Sheets.');
   renderKehadiran(); renderDashboard(); closeModal('kehadiranModal');
 }
@@ -1876,7 +1902,7 @@ async function saveDetail(){
   document.querySelectorAll('.det-ket').forEach(inp => {
     const d = detailList.find(x=>x.id===inp.dataset.id); if(d){ d.keterangan = inp.value; if(!changed.includes(d)) changed.push(d); }
   });
-  for(const d of changed){ await gasUpsert('KehadiranDetail', detailToSheet(d)); }
+  await Promise.all(changed.map(d => gasUpsert('KehadiranDetail', detailToSheet(d))));
   showToast('Kehadiran tersimpan ke Google Sheets.');
   closeModal('detailModal'); renderKehadiran();
 }
